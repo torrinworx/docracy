@@ -1,1 +1,7 @@
-.env 
+.env
+.env.local
+.env.*
+target/
+qdrant_data/
+postgres_data/
+.DS_Store
