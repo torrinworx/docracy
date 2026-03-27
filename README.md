@@ -12,9 +12,9 @@ Think of this system as a database for google doc style documents. Each individu
 
 - **init**, to agents: 'load this to learn how the system works. The user has installed this system to manage data via agentic driven beuracracy. Run this tool before proceeding further in the chat. it will provide vital context about the user.'
 - **Create**, allow agent to create a refined document, pass it in, and store it in a normal db + vector database.
-- **Read**, somehow send in the entire chat history into this as a parameter. Vector search is run, top results, the entire files of some filtered set of results are appended to the context. List id's and short blurbs about other results not included. Ensure high relevancy to the user message/context history.
 
 Later:
+- **Read**, somehow send in the entire chat history into this as a parameter. Vector search is run, top results, the entire files of some filtered set of results are appended to the context. List id's and short blurbs about other results not included. Ensure high relevancy to the user message/context history.
 - **Update** allow agent's to update and append findings to existing documents, including re-writing them. (store versioned documents? archive previous versions? link them together so that there is a history of documents?)
 - **Delete** allow agent's to delete documents if they are no longer relevant. (in reality it would be just archiving, in the future searches will have an archive=true/false flag to search through archived documents.).
 
@@ -35,10 +35,10 @@ Later:
 - **chats** Raw chat stores, by default archived on, good to search through for specific debugging or reviewing past revisions and decisions.
 
 # Document extensibility
-The contents of a document can be dictated by the agents, and the 'context' documents the agents have control over to change, but, since the context documents are able to change, I also want the constitution to outline that the agents can develop policies around adding metadata to the documents that they create, such as for example when an update happens to a document, they can reference commit hashes and specific files:
+The contents of a document can be dictated by the agents, and the 'context' documents the agents have control over to change, but, since the context documents are able to change, I also want the constitution to outline that the agents can develop policies around adding extensions to the documents that they create, such as for example when an update happens to a document, they can reference commit hashes and specific files:
 
 ```
-metadata: {
+extensions: {
 	repo_files: [
 		./frontend/index.jsx
 		./backend/index.js
@@ -54,9 +54,9 @@ metadata: {
 
 The goal with these is to extend the document system, such that the llms can query via indexable entries that they themselves create depending on the repository or task at hand they are dealing with.
 
-They can then outline both how to define these in the documents metadata on the Create request, and how to query for them in the Read function call.
+They can then outline both how to define these in the documents extensions on the Create request, and how to query for them in the Read function call.
 
-The agents, whenever they come accross a need for it, would create new metadata fields for each document stored along side it in the database. Agents would then update the 'context' documents to dictate how the new fields would work and how to use them to other agents, all of this would follow the same framework and logical requirenments as the constitution would state for updating the 'context' documents. 
+The agents, whenever they come accross a need for it, would create new extensions fields for each document stored along side it in the database. Agents would then update the 'context' documents to dictate how the new fields would work and how to use them to other agents, all of this would follow the same framework and logical requirenments as the constitution would state for updating the 'context' documents. 
 
 I think this is going to be a core feature in this framework.
 
@@ -76,7 +76,7 @@ I think this is going to be a core feature in this framework.
 
 	// set by agents, (function inputs that agents respond with parameters):
 	type: 'constitution | context | general | chats | revision | ...',
-	content: '...', // actual content fed into the context system.
+	content: '...', // actual content fed into the context system. content structure can vary but always needs to be serializable into a string so that it can be passed into llms context.
 	extensions: {
 		// extensions 
 	} 
@@ -170,30 +170,24 @@ Priority:
 5. build out a server that's able to be self hosted
 4. mcp server, then hook the mcp server up to opencode on the local machine.
 
-## Future
+## Notes and non finalized ideas:
+I want to build out the core logic for the entire system in rust, independent from any usage interface (cli, api, mcp, etc)
+
+The first interface will be the testing harness, then the cli, 
+
+the core of this system should not be specific to programming or a developers and software development as a goal. it should be general for writitng, server/homelab management, database/spread sheet management, and general computer stuff.
+
+Accept that the agent will have to do some retreival manually? Let it decide when it needs more context via calls? 
+
+simple per document revision model, not full git level diffing stuff. Google doc versioning.
+
+Allow tools to be run on documents, say like 'ripgrep' or regex or echo a system log into a document content and create a document from that so the llm doesn't have to directly process a whole log into context in order to store it. 
+
+key thing to keep in mind: we aren't trying to normalize arbitrary data itself, we are trying to organize it, and search through it using tools designed to search through arbitrary data. Keyword search, date matching, id matching, role matching, vector relevance search, etc. it's the agent's/llm's job to use that arbitrary data arbitrarily.
+
 It would be smart to design this so that in the future there can be multiple clients connected to the same db, allow for documents to be assigned to a given client, so that each agent can modify a given document however they see fit.
 
 I could eventually something where when a document is updated, an agent is called to validate the update before it's written to ensure it conforms to a 'validator' or something, similar to validation in other databases but for arbitrary data. not that it would be safe with prompt injecting, but it would be cool for verification of abstract ideas like "writing style". Things that we can't easily create regex for.
 
 or watchers could be used for other things? idk
 
-## Notes:
-I want to build out the core logic for the entire system in rust, independent from any usage interface (cli, api, mcp, etc)
-
-The first interface will be the testing harness, then the cli, 
-
-I feel like the above system still presents the problem of "The llm doesn't have the appropriate context to even contribute to the system", I feel like they would still act like a child in terms of not understanding the system or the repo itself. There isn't a vector that allows them to contribute to a growing standard or corpus. it's still independent and search base. Has no way for a communtiy to grow, constant memory is needed here for this to imerge somehow. Maybe we need some "init_context" intro stuff that intros the agent into the system and tells them how to interact with it?
-
-How should documents be organized in the db? How would it make sense for an llm to reference it? From my experience llms in agentic frameworks really like things in a given folder directory structure. It's easy for them to navigate becase there are already lots of tools avaialbe in linux to navigate to specific files and find things and re-read things if needed. Putting things in a db kinda get's rid of that. Solution to this? 
-
-the core of this system should not be specific to programming or a developers and software development as a goal. it should be general for writitng, server/homelab management, database/spread sheet management, and general computer stuff.
-
-Accept that the agent will have to do some retreival manually? Let it decide when it needs more context via calls? 
-
-Do we need version management? Why not just have everything in git? Maybe, core is sql or some database, documents are stored there. Then we have a "propegation layer" that mirrors those changes in something like git so we get version control? and at the same time in a vector database so that we can have vector search? That feels like an overbearing idea though. I have doubts, but it could be useful? 
-
-I'm leaning towards this being an independnt opinionated system separate from git. I feel like we can do fancier things here without the need for mirroring functionality and having to keep parity with git work flows. Git would give us version control yes, but the part of the goal here, and what makes for good systems that llms like to use is simlifyijng and abstracing the complexities here. If an llm can use git to write all this, sure it would have complete control over everything, but it would also allow it to fuck up a merge, fuck up a rebase or a nasty force push. Yeah we aren't storing the diffs, and that means less efficiency, but these are mostly really small text files, While I like the idea of having it git compatible and version controlled I don't really see massive benefits here to having git asa the core base of everything document wise.
-
-Allow tools to be run on documents, say like 'ripgrep' or regex or echo a system log into a document content and create a document from that so the llm doesn't have to directly process a whole log into context in order to store it. 
-
-key thing to keep in mind: we aren't trying to normalize arbitrary data, we are trying to organize it, and search through it using tools designed to search through arbitrary data. Keyword search, date matching, id matching, role matching, vector relevance search, etc.
