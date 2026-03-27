@@ -195,10 +195,28 @@ I could eventually something where when a document is updated, an agent is calle
 or watchers could be used for other things? idk
 
 
+TODO/Later: linked documents, similar to how Obsidean works I guess? Why not have a structured way to link/cite other documents throughout a given document:
+
+```json
+links: [
+	'document_1',
+	'document_2', 
+]
+
+// Then throughout the content, any references formatted as [0] just automatically mean that that document was cited in this fact/info.
+```
+This wouldn't be just within the extensions, it would be a baked in thing in all documents. Could be included in the content, but also
+
+This would allow for cross document linking and searching and potentially something like a document tree context loading mechanism? or at least searching. might aid in searches stronger than pure vector search, at least with known concepts.
+
+Maybe there can also be some validation here when the documents get's created/updated that the ids in the links array are present in the db.
+
+The index order of the id is the index that the llms should use to cite specific facts in their content. so to reference document_1 here in this sentence, I would just do this. [0].
+
 # phases:
 suggested development phases to follow:
 
-1. Define the document model for postgress. create a struct/class for the documents that is extensible, both in rust and postgress, in the ways described above.
+1. Define the document model for postgress and rust. create a struct/class for the documents that is extensible, both in rust and postgress, in the ways described above.
 2. Define the 'core' library, struct/class thingy. This should be extensible and define all the types and stuff. (need to keep in mind the core logic needs to be agnostic from a database, since we want to store and parity data in things like vectordbs in the future).
 3. Create the 'Init' function, should simply return the local ./governance md files, as well as any active type = 'context' documents found in the database that aren't archived or deleted.
 4. 'Create' function, takes parameters for creating a document. Lets the LLMs define the type, content, and extensions of a document. 'constitution' type is a system locked type, agents should never be allowed to create one.
