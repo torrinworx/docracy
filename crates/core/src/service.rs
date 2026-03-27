@@ -229,15 +229,106 @@ pub struct InitBundleResult {
 }
 
 pub fn init_bundle(
-    repo: &dyn Repository,
+    repo: &mut dyn Repository,
     governance: &dyn GovernanceSource,
+    clock: &dyn Clock,
+    ids: &dyn IdGenerator,
 ) -> Result<InitBundleResult, CoreError> {
     let bundle = governance.load_bundle()?;
+
+    // Bootstrap constitution into the DB if missing (or repair it to match the immutable file).
+    let constitution_md = bundle
+        .files
+        .iter()
+        .find(|f| f.name == "CONSTITUTION.md")
+        .ok_or(crate::errors::GovernanceError::MissingConstitution)?
+        .content
+        .clone();
+    bootstrap_constitution(repo, clock, ids, &constitution_md)?;
+
     let context_documents = repo.list_active_context_documents()?;
     Ok(InitBundleResult {
         governance: bundle,
         context_documents,
     })
+}
+
+fn bootstrap_constitution(
+    repo: &mut dyn Repository,
+    clock: &dyn Clock,
+    ids: &dyn IdGenerator,
+    constitution_md: &str,
+) -> Result<(), CoreError> {
+    let expected = Value::String(constitution_md.to_string());
+
+    let existing =
+        repo.find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)?;
+    match existing {
+        None => {
+            // System-created: allow reserved doc type.
+            let now = clock.now();
+            let doc_id = ids.new_document_id();
+            let rev_id = ids.new_revision_id();
+
+            let revision = DocumentRevision {
+                id: rev_id,
+                document_id: doc_id,
+                version: 1,
+                parent_revision_id: None,
+                created_at: now,
+                superseded_at: None,
+                content: expected.clone(),
+                extensions: Extensions::new(),
+            };
+            revision.validate()?;
+
+            let document = Document {
+                id: doc_id,
+                doc_type: crate::document::DocumentType::new(
+                    crate::document::DocumentType::CONSTITUTION,
+                )?,
+                status: DocumentStatus::active(),
+                created_at: now,
+                modified_at: now,
+                current_revision_id: Some(rev_id),
+                archived_at: None,
+                deleted_at: None,
+                content: expected,
+                extensions: Extensions::new(),
+            };
+            document.validate()?;
+
+            repo.insert_document(document)?;
+            repo.insert_revision(revision)?;
+            Ok(())
+        }
+        Some(doc) => {
+            let needs_content = doc.content != expected;
+            let needs_active = doc.status.as_str() != DocumentStatus::ACTIVE
+                || doc.archived_at.is_some()
+                || doc.deleted_at.is_some();
+            if !needs_content && !needs_active {
+                return Ok(());
+            }
+
+            update_document(
+                repo,
+                clock,
+                ids,
+                UpdateDocumentInput {
+                    id: doc.id,
+                    content: if needs_content { Some(expected) } else { None },
+                    extensions: None,
+                    status: if needs_active {
+                        Some(DocumentStatus::ACTIVE.to_string())
+                    } else {
+                        None
+                    },
+                },
+            )?;
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]
@@ -247,6 +338,7 @@ mod tests {
     use crate::DocumentType;
     use chrono::TimeZone;
     use serde_json::json;
+    use tempfile::TempDir;
 
     #[derive(Debug, Clone, Copy)]
     struct FixedClock(DateTime<Utc>);
@@ -321,5 +413,87 @@ mod tests {
         assert_eq!(updated.new_revision.parent_revision_id, Some(rev1));
         assert_eq!(updated.superseded_revision.superseded_at.is_some(), true);
         assert_eq!(updated.document.current_revision_id, Some(rev2));
+    }
+
+    #[test]
+    fn init_bootstraps_missing_constitution() {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let clock = FixedClock(now);
+
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello constitution").unwrap();
+
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let doc_id = DocumentId(Uuid::from_u128(10));
+        let rev1 = RevisionId(Uuid::from_u128(11));
+        let ids = FixedIds {
+            doc: doc_id,
+            revs: vec![rev1],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let out = init_bundle(&mut repo, &governance, &clock, &ids).unwrap();
+        assert_eq!(out.governance.files.len(), 1);
+
+        let doc = repo
+            .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .unwrap()
+            .unwrap();
+        assert_eq!(doc.id, doc_id);
+        assert_eq!(doc.status.as_str(), DocumentStatus::ACTIVE);
+        assert_eq!(doc.content, Value::String("hello constitution".to_string()));
+        let rev = repo
+            .get_revision(doc.current_revision_id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(rev.version, 1);
+    }
+
+    #[test]
+    fn init_repairs_constitution_content_mismatch() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let td = TempDir::new().unwrap();
+        let constitution_path = td.path().join("CONSTITUTION.md");
+        std::fs::write(&constitution_path, "v1").unwrap();
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let doc_id = DocumentId(Uuid::from_u128(20));
+        let rev1 = RevisionId(Uuid::from_u128(21));
+        let rev2 = RevisionId(Uuid::from_u128(22));
+        let ids = FixedIds {
+            doc: doc_id,
+            revs: vec![rev1, rev2],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        init_bundle(&mut repo, &governance, &FixedClock(t0), &ids).unwrap();
+
+        std::fs::write(&constitution_path, "v2").unwrap();
+        init_bundle(
+            &mut repo,
+            &governance,
+            &FixedClock(t0 + chrono::Duration::seconds(5)),
+            &ids,
+        )
+        .unwrap();
+
+        let doc = repo
+            .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .unwrap()
+            .unwrap();
+        assert_eq!(doc.id, doc_id);
+        assert_eq!(doc.content, Value::String("v2".to_string()));
+        let rev = repo
+            .get_revision(doc.current_revision_id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(rev.version, 2);
+        assert_eq!(rev.parent_revision_id, Some(rev1));
+        let parent = repo.get_revision(rev1).unwrap().unwrap();
+        assert!(parent.superseded_at.is_some());
     }
 }

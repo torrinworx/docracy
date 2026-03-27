@@ -45,6 +45,15 @@ impl Repository for MemoryRepository {
             .collect())
     }
 
+    fn find_latest_document_by_type(&self, doc_type: &str) -> Result<Option<Document>, RepoError> {
+        Ok(self
+            .documents
+            .values()
+            .filter(|d| d.doc_type.as_str() == doc_type)
+            .max_by(|a, b| a.modified_at.cmp(&b.modified_at))
+            .cloned())
+    }
+
     fn insert_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError> {
         if self.revisions.contains_key(&rev.id) {
             return Err(RepoError::Conflict);

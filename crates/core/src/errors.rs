@@ -14,6 +14,9 @@ pub enum RepoError {
 pub enum GovernanceError {
     #[error("io error: {0}")]
     Io(String),
+
+    #[error("missing CONSTITUTION.md in governance bundle")]
+    MissingConstitution,
 }
 
 #[derive(Debug, Error)]

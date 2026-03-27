@@ -12,6 +12,9 @@ pub trait Repository {
     fn get_document(&self, id: DocumentId) -> Result<Option<Document>, RepoError>;
     fn get_documents(&self, ids: &[DocumentId]) -> Result<Vec<Document>, RepoError>;
 
+    /// Returns the most recently modified document matching the type, regardless of status.
+    fn find_latest_document_by_type(&self, doc_type: &str) -> Result<Option<Document>, RepoError>;
+
     fn insert_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
     fn update_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
     fn get_revision(&self, id: RevisionId) -> Result<Option<DocumentRevision>, RepoError>;
