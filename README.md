@@ -243,3 +243,6 @@ This should return:
   "include": ["content", "extensions"]
 }
 ```
+7. 'Update' function, create a revision abstraction tool that updates a given document while storing previous revision history with 'superceeded' state.
+8. Add the test harness.
+9. Add CLI.
