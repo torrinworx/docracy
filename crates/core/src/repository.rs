@@ -2,23 +2,41 @@ use crate::document::Document;
 use crate::errors::RepoError;
 use crate::ids::{DocumentId, RevisionId};
 use crate::revision::DocumentRevision;
+use async_trait::async_trait;
 
 /// Storage boundary for core logic.
 ///
 /// Concrete adapters (postgres, sqlite, in-memory, etc) implement this.
+#[async_trait]
 pub trait Repository {
-    fn insert_document(&mut self, doc: Document) -> Result<(), RepoError>;
-    fn update_document(&mut self, doc: Document) -> Result<(), RepoError>;
-    fn get_document(&self, id: DocumentId) -> Result<Option<Document>, RepoError>;
-    fn get_documents(&self, ids: &[DocumentId]) -> Result<Vec<Document>, RepoError>;
+    async fn create_document_with_revision(
+        &mut self,
+        doc: Document,
+        rev: DocumentRevision,
+    ) -> Result<(), RepoError>;
+
+    async fn update_document_with_revisions(
+        &mut self,
+        doc: Document,
+        superseded: DocumentRevision,
+        new_rev: DocumentRevision,
+    ) -> Result<(), RepoError>;
+
+    async fn update_document(&mut self, doc: Document) -> Result<(), RepoError>;
+
+    async fn get_document(&self, id: DocumentId) -> Result<Option<Document>, RepoError>;
+    async fn get_documents(&self, ids: &[DocumentId]) -> Result<Vec<Document>, RepoError>;
 
     /// Returns the most recently modified document matching the type, regardless of status.
-    fn find_latest_document_by_type(&self, doc_type: &str) -> Result<Option<Document>, RepoError>;
+    async fn find_latest_document_by_type(
+        &self,
+        doc_type: &str,
+    ) -> Result<Option<Document>, RepoError>;
 
-    fn insert_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
-    fn update_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
-    fn get_revision(&self, id: RevisionId) -> Result<Option<DocumentRevision>, RepoError>;
+    async fn insert_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
+    async fn update_revision(&mut self, rev: DocumentRevision) -> Result<(), RepoError>;
+    async fn get_revision(&self, id: RevisionId) -> Result<Option<DocumentRevision>, RepoError>;
 
     /// Used by Init: active type=context docs, not archived/deleted.
-    fn list_active_context_documents(&self) -> Result<Vec<Document>, RepoError>;
+    async fn list_active_context_documents(&self) -> Result<Vec<Document>, RepoError>;
 }

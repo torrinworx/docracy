@@ -19,6 +19,6 @@ pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};
 pub use service::{
     create_document, init_bundle, read_documents, update_document, CreateDocumentResult,
-    InitBundleResult, ReadDocumentsResult, UpdateDocumentResult,
+    InitBundleResult, ReadDocumentsResult, UpdateDocumentInput, UpdateDocumentResult,
 };
 pub use validation::{ValidationError, ValidationResult};

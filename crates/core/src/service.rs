@@ -47,7 +47,7 @@ pub struct CreateDocumentResult {
     pub revision: DocumentRevision,
 }
 
-pub fn create_document(
+pub async fn create_document(
     repo: &mut dyn Repository,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
@@ -85,8 +85,8 @@ pub fn create_document(
     };
     document.validate()?;
 
-    repo.insert_document(document.clone())?;
-    repo.insert_revision(revision.clone())?;
+    repo.create_document_with_revision(document.clone(), revision.clone())
+        .await?;
 
     Ok(CreateDocumentResult { document, revision })
 }
@@ -97,11 +97,11 @@ pub struct ReadDocumentsResult {
     pub missing_ids: Vec<DocumentId>,
 }
 
-pub fn read_documents(
+pub async fn read_documents(
     repo: &dyn Repository,
     ids: &[DocumentId],
 ) -> Result<ReadDocumentsResult, CoreError> {
-    let docs = repo.get_documents(ids)?;
+    let docs = repo.get_documents(ids).await?;
     let mut found = std::collections::HashSet::new();
     for d in &docs {
         found.insert(d.id);
@@ -133,7 +133,7 @@ pub struct UpdateDocumentInput {
     pub status: Option<String>,
 }
 
-pub fn update_document(
+pub async fn update_document(
     repo: &mut dyn Repository,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
@@ -144,14 +144,16 @@ pub fn update_document(
     }
 
     let mut doc = repo
-        .get_document(input.id)?
+        .get_document(input.id)
+        .await?
         .ok_or(CoreError::DocumentNotFound)?;
     let current_rev_id = doc
         .current_revision_id
         .ok_or(CoreError::MissingCurrentRevision)?;
 
     let mut current_rev = repo
-        .get_revision(current_rev_id)?
+        .get_revision(current_rev_id)
+        .await?
         .ok_or(CoreError::RevisionNotFound)?;
 
     let now = clock.now();
@@ -210,10 +212,8 @@ pub fn update_document(
     }
     doc.validate()?;
 
-    // Persist.
-    repo.update_revision(current_rev.clone())?;
-    repo.insert_revision(new_rev.clone())?;
-    repo.update_document(doc.clone())?;
+    repo.update_document_with_revisions(doc.clone(), current_rev.clone(), new_rev.clone())
+        .await?;
 
     Ok(UpdateDocumentResult {
         document: doc,
@@ -228,7 +228,7 @@ pub struct InitBundleResult {
     pub context_documents: Vec<Document>,
 }
 
-pub fn init_bundle(
+pub async fn init_bundle(
     repo: &mut dyn Repository,
     governance: &dyn GovernanceSource,
     clock: &dyn Clock,
@@ -244,16 +244,16 @@ pub fn init_bundle(
         .ok_or(crate::errors::GovernanceError::MissingConstitution)?
         .content
         .clone();
-    bootstrap_constitution(repo, clock, ids, &constitution_md)?;
+    bootstrap_constitution(repo, clock, ids, &constitution_md).await?;
 
-    let context_documents = repo.list_active_context_documents()?;
+    let context_documents = repo.list_active_context_documents().await?;
     Ok(InitBundleResult {
         governance: bundle,
         context_documents,
     })
 }
 
-fn bootstrap_constitution(
+async fn bootstrap_constitution(
     repo: &mut dyn Repository,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
@@ -261,8 +261,9 @@ fn bootstrap_constitution(
 ) -> Result<(), CoreError> {
     let expected = Value::String(constitution_md.to_string());
 
-    let existing =
-        repo.find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)?;
+    let existing = repo
+        .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
+        .await?;
     match existing {
         None => {
             // System-created: allow reserved doc type.
@@ -298,8 +299,8 @@ fn bootstrap_constitution(
             };
             document.validate()?;
 
-            repo.insert_document(document)?;
-            repo.insert_revision(revision)?;
+            repo.create_document_with_revision(document, revision)
+                .await?;
             Ok(())
         }
         Some(doc) => {
@@ -325,7 +326,8 @@ fn bootstrap_constitution(
                         None
                     },
                 },
-            )?;
+            )
+            .await?;
             Ok(())
         }
     }
@@ -365,8 +367,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn create_then_update_creates_revision_chain() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn create_then_update_creates_revision_chain() {
         let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let clock = FixedClock(now);
 
@@ -390,6 +392,7 @@ mod tests {
                 extensions: Extensions::new(),
             },
         )
+        .await
         .unwrap();
 
         assert_eq!(created.document.id, doc_id);
@@ -407,6 +410,7 @@ mod tests {
                 status: None,
             },
         )
+        .await
         .unwrap();
 
         assert_eq!(updated.new_revision.version, 2);
@@ -415,8 +419,8 @@ mod tests {
         assert_eq!(updated.document.current_revision_id, Some(rev2));
     }
 
-    #[test]
-    fn init_bootstraps_missing_constitution() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_bootstraps_missing_constitution() {
         let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let clock = FixedClock(now);
 
@@ -434,11 +438,14 @@ mod tests {
         };
 
         let mut repo = MemoryRepository::new();
-        let out = init_bundle(&mut repo, &governance, &clock, &ids).unwrap();
+        let out = init_bundle(&mut repo, &governance, &clock, &ids)
+            .await
+            .unwrap();
         assert_eq!(out.governance.files.len(), 1);
 
         let doc = repo
             .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(doc.id, doc_id);
@@ -446,13 +453,14 @@ mod tests {
         assert_eq!(doc.content, Value::String("hello constitution".to_string()));
         let rev = repo
             .get_revision(doc.current_revision_id.unwrap())
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(rev.version, 1);
     }
 
-    #[test]
-    fn init_repairs_constitution_content_mismatch() {
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_repairs_constitution_content_mismatch() {
         let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
 
         let td = TempDir::new().unwrap();
@@ -470,7 +478,9 @@ mod tests {
         };
 
         let mut repo = MemoryRepository::new();
-        init_bundle(&mut repo, &governance, &FixedClock(t0), &ids).unwrap();
+        init_bundle(&mut repo, &governance, &FixedClock(t0), &ids)
+            .await
+            .unwrap();
 
         std::fs::write(&constitution_path, "v2").unwrap();
         init_bundle(
@@ -479,21 +489,24 @@ mod tests {
             &FixedClock(t0 + chrono::Duration::seconds(5)),
             &ids,
         )
+        .await
         .unwrap();
 
         let doc = repo
             .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(doc.id, doc_id);
         assert_eq!(doc.content, Value::String("v2".to_string()));
         let rev = repo
             .get_revision(doc.current_revision_id.unwrap())
+            .await
             .unwrap()
             .unwrap();
         assert_eq!(rev.version, 2);
         assert_eq!(rev.parent_revision_id, Some(rev1));
-        let parent = repo.get_revision(rev1).unwrap().unwrap();
+        let parent = repo.get_revision(rev1).await.unwrap().unwrap();
         assert!(parent.superseded_at.is_some());
     }
 }
