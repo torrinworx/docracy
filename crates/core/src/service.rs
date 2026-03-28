@@ -2,6 +2,7 @@ use crate::document::{Document, DocumentStatus, NewDocument};
 use crate::errors::CoreError;
 use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
+use crate::query::{encode_cursor, project_rows, QueryInput, QueryResult};
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
 use chrono::{DateTime, Utc};
@@ -115,6 +116,23 @@ pub async fn read_documents(
     Ok(ReadDocumentsResult {
         documents: docs,
         missing_ids,
+    })
+}
+
+pub async fn query_documents(
+    repo: &dyn Repository,
+    input: QueryInput,
+) -> Result<QueryResult, CoreError> {
+    let (query, select, applied_where) = input.parse()?;
+    let out = repo.query_documents(query).await?;
+    let rows = project_rows(&out.documents, &select);
+    let next_cursor = out.next_cursor.as_ref().map(encode_cursor);
+
+    Ok(QueryResult {
+        rows,
+        total_count: out.total_count,
+        applied_where,
+        next_cursor,
     })
 }
 
@@ -261,48 +279,58 @@ async fn bootstrap_constitution(
 ) -> Result<(), CoreError> {
     let expected = Value::String(constitution_md.to_string());
 
-    let existing = repo
+    let mut existing = repo
         .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
         .await?;
-    match existing {
-        None => {
-            // System-created: allow reserved doc type.
-            let now = clock.now();
-            let doc_id = ids.new_document_id();
-            let rev_id = ids.new_revision_id();
 
-            let revision = DocumentRevision {
-                id: rev_id,
-                document_id: doc_id,
-                version: 1,
-                parent_revision_id: None,
-                created_at: now,
-                superseded_at: None,
-                content: expected.clone(),
-                extensions: Extensions::new(),
-            };
-            revision.validate()?;
+    if existing.is_none() {
+        // System-created: allow reserved doc type.
+        let now = clock.now();
+        let doc_id = ids.new_document_id();
+        let rev_id = ids.new_revision_id();
 
-            let document = Document {
-                id: doc_id,
-                doc_type: crate::document::DocumentType::new(
-                    crate::document::DocumentType::CONSTITUTION,
-                )?,
-                status: DocumentStatus::active(),
-                created_at: now,
-                modified_at: now,
-                current_revision_id: Some(rev_id),
-                archived_at: None,
-                deleted_at: None,
-                content: expected,
-                extensions: Extensions::new(),
-            };
-            document.validate()?;
+        let revision = DocumentRevision {
+            id: rev_id,
+            document_id: doc_id,
+            version: 1,
+            parent_revision_id: None,
+            created_at: now,
+            superseded_at: None,
+            content: expected.clone(),
+            extensions: Extensions::new(),
+        };
+        revision.validate()?;
 
-            repo.create_document_with_revision(document, revision)
-                .await?;
-            Ok(())
+        let document = Document {
+            id: doc_id,
+            doc_type: crate::document::DocumentType::new(
+                crate::document::DocumentType::CONSTITUTION,
+            )?,
+            status: DocumentStatus::active(),
+            created_at: now,
+            modified_at: now,
+            current_revision_id: Some(rev_id),
+            archived_at: None,
+            deleted_at: None,
+            content: expected.clone(),
+            extensions: Extensions::new(),
+        };
+        document.validate()?;
+
+        match repo.create_document_with_revision(document, revision).await {
+            Ok(()) => return Ok(()),
+            Err(crate::errors::RepoError::Conflict) => {
+                // Another client raced us; fall through to repair logic.
+                existing = repo
+                    .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
+                    .await?;
+            }
+            Err(e) => return Err(e.into()),
         }
+    }
+
+    match existing {
+        None => Err(CoreError::Repo(crate::errors::RepoError::Conflict)),
         Some(doc) => {
             let needs_content = doc.content != expected;
             let needs_active = doc.status.as_str() != DocumentStatus::ACTIVE
@@ -338,8 +366,10 @@ mod tests {
     use super::*;
     use crate::memory::MemoryRepository;
     use crate::DocumentType;
+    use crate::QueryInput;
     use chrono::TimeZone;
     use serde_json::json;
+    use serde_json::{Map, Value};
     use tempfile::TempDir;
 
     #[derive(Debug, Clone, Copy)]
@@ -363,6 +393,26 @@ mod tests {
         fn new_revision_id(&self) -> RevisionId {
             let i = self.idx.get();
             self.idx.set(i + 1);
+            self.revs[i]
+        }
+    }
+
+    #[derive(Debug)]
+    struct SeqIds {
+        docs: Vec<DocumentId>,
+        revs: Vec<RevisionId>,
+        doc_idx: std::cell::Cell<usize>,
+        rev_idx: std::cell::Cell<usize>,
+    }
+    impl IdGenerator for SeqIds {
+        fn new_document_id(&self) -> DocumentId {
+            let i = self.doc_idx.get();
+            self.doc_idx.set(i + 1);
+            self.docs[i]
+        }
+        fn new_revision_id(&self) -> RevisionId {
+            let i = self.rev_idx.get();
+            self.rev_idx.set(i + 1);
             self.revs[i]
         }
     }
@@ -508,5 +558,110 @@ mod tests {
         assert_eq!(rev.parent_revision_id, Some(rev1));
         let parent = repo.get_revision(rev1).await.unwrap().unwrap();
         assert!(parent.superseded_at.is_some());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn query_defaults_to_active_and_supports_archived_flag() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let ids = SeqIds {
+            docs: vec![
+                DocumentId(Uuid::from_u128(100)),
+                DocumentId(Uuid::from_u128(101)),
+            ],
+            revs: vec![
+                RevisionId(Uuid::from_u128(200)),
+                RevisionId(Uuid::from_u128(201)),
+                RevisionId(Uuid::from_u128(202)),
+            ],
+            doc_idx: std::cell::Cell::new(0),
+            rev_idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let d1 = create_document(
+            &mut repo,
+            &FixedClock(t0),
+            &ids,
+            NewDocument {
+                doc_type: DocumentType::new("general").unwrap(),
+                content: json!({"text": "hello"}),
+                extensions: Extensions::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let d2 = create_document(
+            &mut repo,
+            &FixedClock(t0 + chrono::Duration::seconds(1)),
+            &ids,
+            NewDocument {
+                doc_type: DocumentType::new("general").unwrap(),
+                content: json!({"text": "bye"}),
+                extensions: Extensions::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Archive the second document.
+        update_document(
+            &mut repo,
+            &FixedClock(t0 + chrono::Duration::seconds(2)),
+            &ids,
+            UpdateDocumentInput {
+                id: d2.document.id,
+                content: None,
+                extensions: None,
+                status: Some(DocumentStatus::ARCHIVED.to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Default: active only.
+        let out = query_documents(
+            &repo,
+            QueryInput {
+                query: None,
+                where_: Map::new(),
+                order_by: vec![],
+                select: vec!["id".to_string()],
+                limit: Some(10),
+                cursor: None,
+            },
+        )
+        .await
+        .unwrap();
+        let ids: Vec<String> = out
+            .rows
+            .into_iter()
+            .map(|r| r.get("id").unwrap().as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(ids, vec![d1.document.id.to_string()]);
+
+        // Archived=true: return archived docs even without status filter.
+        let mut where_ = Map::new();
+        where_.insert("archived".to_string(), Value::Bool(true));
+        let out = query_documents(
+            &repo,
+            QueryInput {
+                query: None,
+                where_,
+                order_by: vec![],
+                select: vec!["id".to_string()],
+                limit: Some(10),
+                cursor: None,
+            },
+        )
+        .await
+        .unwrap();
+        let ids: Vec<String> = out
+            .rows
+            .into_iter()
+            .map(|r| r.get("id").unwrap().as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(ids, vec![d2.document.id.to_string()]);
     }
 }

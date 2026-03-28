@@ -4,6 +4,9 @@ use async_trait::async_trait;
 use docracy_core::document::{Document, DocumentStatus, DocumentType};
 use docracy_core::errors::RepoError;
 use docracy_core::ids::{DocumentId, RevisionId};
+use docracy_core::query::{
+    DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult,
+};
 use docracy_core::repository::Repository;
 use docracy_core::revision::DocumentRevision;
 use serde_json::{Map, Value};
@@ -456,5 +459,155 @@ ORDER BY modified_at DESC
         .map_err(map_sqlx_error)?;
 
         rows.into_iter().map(doc_row_to_core).collect()
+    }
+
+    async fn query_documents(
+        &self,
+        query: DocumentQuery,
+    ) -> Result<DocumentQueryResult, RepoError> {
+        use sqlx::Postgres;
+
+        // Count (ignores cursor): total matching rows.
+        let mut count_qb =
+            sqlx::QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM documents WHERE 1=1");
+        push_query_filters(&mut count_qb, &query, false);
+        let total_count: i64 = count_qb
+            .build_query_scalar()
+            .fetch_one(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        // Page.
+        let mut qb = sqlx::QueryBuilder::<Postgres>::new(
+            "SELECT id, \"type\", status, created_at, modified_at, current_revision_id, archived_at, deleted_at, content, extensions FROM documents WHERE 1=1",
+        );
+        push_query_filters(&mut qb, &query, true);
+
+        match query.order {
+            DocumentQueryOrder::ModifiedDesc => qb.push(" ORDER BY modified_at DESC, id DESC"),
+            DocumentQueryOrder::ModifiedAsc => qb.push(" ORDER BY modified_at ASC, id ASC"),
+            DocumentQueryOrder::CreatedDesc => qb.push(" ORDER BY created_at DESC, id DESC"),
+            DocumentQueryOrder::CreatedAsc => qb.push(" ORDER BY created_at ASC, id ASC"),
+        };
+
+        // Fetch one extra row to know if there's another page.
+        qb.push(" LIMIT ")
+            .push_bind(i64::from(query.limit.saturating_add(1)));
+
+        let rows: Vec<DocumentRow> = qb
+            .build_query_as()
+            .fetch_all(&self.pool)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        let mut docs: Vec<Document> = rows
+            .into_iter()
+            .map(doc_row_to_core)
+            .collect::<Result<_, _>>()?;
+
+        let has_more = docs.len() > query.limit as usize;
+        docs.truncate(query.limit as usize);
+
+        let next_cursor = if has_more {
+            docs.last().map(|d| {
+                let ts = match query.order {
+                    DocumentQueryOrder::ModifiedDesc | DocumentQueryOrder::ModifiedAsc => {
+                        d.modified_at
+                    }
+                    DocumentQueryOrder::CreatedDesc | DocumentQueryOrder::CreatedAsc => {
+                        d.created_at
+                    }
+                };
+                DocumentQueryCursor { ts, id: d.id }
+            })
+        } else {
+            None
+        };
+
+        Ok(DocumentQueryResult {
+            documents: docs,
+            total_count: total_count.max(0) as u64,
+            next_cursor,
+        })
+    }
+}
+
+fn push_query_filters<'a>(
+    qb: &mut sqlx::QueryBuilder<'a, sqlx::Postgres>,
+    query: &'a DocumentQuery,
+    include_cursor: bool,
+) {
+    if let Some(types) = &query.types {
+        qb.push(" AND \"type\" = ANY(").push_bind(types).push(")");
+    }
+    if let Some(statuses) = &query.statuses {
+        qb.push(" AND status = ANY(").push_bind(statuses).push(")");
+    }
+    if let Some(archived) = query.archived {
+        if archived {
+            qb.push(" AND archived_at IS NOT NULL");
+        } else {
+            qb.push(" AND archived_at IS NULL");
+        }
+    }
+    if let Some(deleted) = query.deleted {
+        if deleted {
+            qb.push(" AND deleted_at IS NOT NULL");
+        } else {
+            qb.push(" AND deleted_at IS NULL");
+        }
+    }
+    if let Some(gte) = query.created_gte {
+        qb.push(" AND created_at >= ").push_bind(gte);
+    }
+    if let Some(lte) = query.created_lte {
+        qb.push(" AND created_at <= ").push_bind(lte);
+    }
+    if let Some(gte) = query.modified_gte {
+        qb.push(" AND modified_at >= ").push_bind(gte);
+    }
+    if let Some(lte) = query.modified_lte {
+        qb.push(" AND modified_at <= ").push_bind(lte);
+    }
+
+    if let Some(q) = &query.query {
+        qb.push(" AND content_search_tsv @@ websearch_to_tsquery('english', ")
+            .push_bind(q)
+            .push(")");
+    }
+
+    if include_cursor {
+        if let Some(c) = &query.cursor {
+            match query.order {
+                DocumentQueryOrder::ModifiedDesc => {
+                    qb.push(" AND (modified_at, id) < (")
+                        .push_bind(c.ts)
+                        .push(", ")
+                        .push_bind(c.id.0)
+                        .push(")");
+                }
+                DocumentQueryOrder::ModifiedAsc => {
+                    qb.push(" AND (modified_at, id) > (")
+                        .push_bind(c.ts)
+                        .push(", ")
+                        .push_bind(c.id.0)
+                        .push(")");
+                }
+                DocumentQueryOrder::CreatedDesc => {
+                    qb.push(" AND (created_at, id) < (")
+                        .push_bind(c.ts)
+                        .push(", ")
+                        .push_bind(c.id.0)
+                        .push(")");
+                }
+                DocumentQueryOrder::CreatedAsc => {
+                    qb.push(" AND (created_at, id) > (")
+                        .push_bind(c.ts)
+                        .push(", ")
+                        .push_bind(c.id.0)
+                        .push(")");
+                }
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ pub mod errors;
 pub mod governance;
 pub mod ids;
 pub mod memory;
+pub mod query;
 pub mod repository;
 pub mod revision;
 pub mod service;
@@ -15,10 +16,15 @@ pub use errors::{CoreError, GovernanceError, RepoError};
 pub use governance::{FsGovernanceSource, GovernanceBundle, GovernanceFile, GovernanceSource};
 pub use ids::{DocumentId, RevisionId};
 pub use memory::MemoryRepository;
+pub use query::{
+    DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult, QueryInput,
+    QueryResult,
+};
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};
 pub use service::{
-    create_document, init_bundle, read_documents, update_document, CreateDocumentResult,
-    InitBundleResult, ReadDocumentsResult, UpdateDocumentInput, UpdateDocumentResult,
+    create_document, init_bundle, query_documents, read_documents, update_document,
+    CreateDocumentResult, InitBundleResult, ReadDocumentsResult, UpdateDocumentInput,
+    UpdateDocumentResult,
 };
 pub use validation::{ValidationError, ValidationResult};

@@ -1,6 +1,7 @@
 use crate::document::Document;
 use crate::errors::RepoError;
 use crate::ids::{DocumentId, RevisionId};
+use crate::query::{DocumentQuery, DocumentQueryResult};
 use crate::revision::DocumentRevision;
 use async_trait::async_trait;
 
@@ -39,4 +40,7 @@ pub trait Repository {
 
     /// Used by Init: active type=context docs, not archived/deleted.
     async fn list_active_context_documents(&self) -> Result<Vec<Document>, RepoError>;
+
+    async fn query_documents(&self, query: DocumentQuery)
+        -> Result<DocumentQueryResult, RepoError>;
 }

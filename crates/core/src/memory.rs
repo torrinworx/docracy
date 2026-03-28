@@ -1,6 +1,7 @@
 use crate::document::{Document, DocumentStatus, DocumentType};
 use crate::errors::RepoError;
 use crate::ids::{DocumentId, RevisionId};
+use crate::query::{DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult};
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
 use async_trait::async_trait;
@@ -139,5 +140,113 @@ impl Repository for MemoryRepository {
             })
             .cloned()
             .collect())
+    }
+
+    async fn query_documents(
+        &self,
+        query: DocumentQuery,
+    ) -> Result<DocumentQueryResult, RepoError> {
+        let mut docs: Vec<Document> = self.documents.values().cloned().collect();
+
+        if let Some(types) = &query.types {
+            let set: std::collections::HashSet<&str> = types.iter().map(|s| s.as_str()).collect();
+            docs.retain(|d| set.contains(d.doc_type.as_str()));
+        }
+        if let Some(statuses) = &query.statuses {
+            let set: std::collections::HashSet<&str> =
+                statuses.iter().map(|s| s.as_str()).collect();
+            docs.retain(|d| set.contains(d.status.as_str()));
+        }
+        if let Some(archived) = query.archived {
+            docs.retain(|d| d.archived_at.is_some() == archived);
+        }
+        if let Some(deleted) = query.deleted {
+            docs.retain(|d| d.deleted_at.is_some() == deleted);
+        }
+
+        if let Some(gte) = query.created_gte {
+            docs.retain(|d| d.created_at >= gte);
+        }
+        if let Some(lte) = query.created_lte {
+            docs.retain(|d| d.created_at <= lte);
+        }
+        if let Some(gte) = query.modified_gte {
+            docs.retain(|d| d.modified_at >= gte);
+        }
+        if let Some(lte) = query.modified_lte {
+            docs.retain(|d| d.modified_at <= lte);
+        }
+
+        if let Some(q) = &query.query {
+            let needle = q.to_lowercase();
+            docs.retain(|d| {
+                let hay = serde_json::to_string(&d.content).unwrap_or_default();
+                hay.to_lowercase().contains(&needle)
+            });
+        }
+
+        let total_count = docs.len() as u64;
+
+        // Sort + keyset pagination.
+        match query.order {
+            DocumentQueryOrder::ModifiedDesc => {
+                docs.sort_by(|a, b| (b.modified_at, b.id.0).cmp(&(a.modified_at, a.id.0)));
+                if let Some(c) = &query.cursor {
+                    docs.retain(|d| {
+                        d.modified_at < c.ts || (d.modified_at == c.ts && d.id.0 < c.id.0)
+                    });
+                }
+            }
+            DocumentQueryOrder::ModifiedAsc => {
+                docs.sort_by(|a, b| (a.modified_at, a.id.0).cmp(&(b.modified_at, b.id.0)));
+                if let Some(c) = &query.cursor {
+                    docs.retain(|d| {
+                        d.modified_at > c.ts || (d.modified_at == c.ts && d.id.0 > c.id.0)
+                    });
+                }
+            }
+            DocumentQueryOrder::CreatedDesc => {
+                docs.sort_by(|a, b| (b.created_at, b.id.0).cmp(&(a.created_at, a.id.0)));
+                if let Some(c) = &query.cursor {
+                    docs.retain(|d| {
+                        d.created_at < c.ts || (d.created_at == c.ts && d.id.0 < c.id.0)
+                    });
+                }
+            }
+            DocumentQueryOrder::CreatedAsc => {
+                docs.sort_by(|a, b| (a.created_at, a.id.0).cmp(&(b.created_at, b.id.0)));
+                if let Some(c) = &query.cursor {
+                    docs.retain(|d| {
+                        d.created_at > c.ts || (d.created_at == c.ts && d.id.0 > c.id.0)
+                    });
+                }
+            }
+        }
+
+        let mut page = docs;
+        let has_more = page.len() > query.limit as usize;
+        page.truncate(query.limit as usize);
+
+        let next_cursor = if has_more {
+            page.last().map(|d| {
+                let ts = match query.order {
+                    DocumentQueryOrder::ModifiedDesc | DocumentQueryOrder::ModifiedAsc => {
+                        d.modified_at
+                    }
+                    DocumentQueryOrder::CreatedDesc | DocumentQueryOrder::CreatedAsc => {
+                        d.created_at
+                    }
+                };
+                DocumentQueryCursor { ts, id: d.id }
+            })
+        } else {
+            None
+        };
+
+        Ok(DocumentQueryResult {
+            documents: page,
+            total_count,
+            next_cursor,
+        })
     }
 }

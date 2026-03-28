@@ -2,10 +2,12 @@ use docracy_core::document::{DocumentStatus, DocumentType, NewDocument};
 use docracy_core::repository::Repository;
 use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{
-    create_document, init_bundle, update_document, FsGovernanceSource, UpdateDocumentInput,
+    create_document, init_bundle, query_documents, update_document, FsGovernanceSource, QueryInput,
+    UpdateDocumentInput,
 };
 use docracy_postgres::PgRepository;
 use serde_json::json;
+use serde_json::Map;
 use sqlx::postgres::PgPoolOptions;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -182,4 +184,38 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     .await
     .unwrap();
     assert_eq!(updated.new_revision.version, 2);
+
+    // Query (content keyword) works.
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"msg": "hello world"}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let out = query_documents(
+        &repo,
+        QueryInput {
+            query: Some("hello".to_string()),
+            where_: Map::new(),
+            order_by: vec![],
+            select: vec!["id".to_string()],
+            limit: Some(10),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    let ids: Vec<String> = out
+        .rows
+        .iter()
+        .map(|r| r.get("id").unwrap().as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.contains(&created.document.id.to_string()));
 }
