@@ -1,0 +1,17 @@
+[package]
+name = "docracy-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "docracy"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+docracy-core = { path = "../core" }
+docracy-postgres = { path = "../postgres" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
