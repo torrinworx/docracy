@@ -96,37 +96,37 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | TBD | Pending |
-| DOC-02 | TBD | Pending |
-| DOC-03 | TBD | Pending |
-| DOC-04 | TBD | Pending |
-| DOC-05 | TBD | Pending |
-| REV-01 | TBD | Pending |
-| REV-02 | TBD | Pending |
-| REV-03 | TBD | Pending |
-| REV-04 | TBD | Pending |
-| GOV-01 | TBD | Pending |
-| GOV-02 | TBD | Pending |
-| GOV-03 | TBD | Pending |
-| GOV-04 | TBD | Pending |
-| PG-01 | TBD | Pending |
-| PG-02 | TBD | Pending |
-| PG-03 | TBD | Pending |
-| QRY-01 | TBD | Pending |
-| QRY-02 | TBD | Pending |
-| QRY-03 | TBD | Pending |
-| QRY-04 | TBD | Pending |
-| CLI-01 | TBD | Pending |
-| CLI-02 | TBD | Pending |
-| CLI-03 | TBD | Pending |
-| TST-01 | TBD | Pending |
-| TST-02 | TBD | Pending |
-| TST-03 | TBD | Pending |
+| DOC-01 | Phase 1 | Pending |
+| DOC-02 | Phase 1 | Pending |
+| DOC-03 | Phase 1 | Pending |
+| DOC-04 | Phase 1 | Pending |
+| DOC-05 | Phase 1 | Pending |
+| REV-01 | Phase 1 | Pending |
+| REV-02 | Phase 1 | Pending |
+| REV-03 | Phase 1 | Pending |
+| REV-04 | Phase 1 | Pending |
+| GOV-01 | Phase 2 | Pending |
+| GOV-02 | Phase 2 | Pending |
+| GOV-03 | Phase 2 | Pending |
+| GOV-04 | Phase 2 | Pending |
+| PG-01 | Phase 1 | Pending |
+| PG-02 | Phase 1 | Pending |
+| PG-03 | Phase 1 | Pending |
+| QRY-01 | Phase 3 | Pending |
+| QRY-02 | Phase 3 | Pending |
+| QRY-03 | Phase 3 | Pending |
+| QRY-04 | Phase 3 | Pending |
+| CLI-01 | Phase 4 | Pending |
+| CLI-02 | Phase 4 | Pending |
+| CLI-03 | Phase 4 | Pending |
+| TST-01 | Phase 4 | Pending |
+| TST-02 | Phase 4 | Pending |
+| TST-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
-- Mapped to phases: 0
-- Unmapped: 26 ⚠️
+- Mapped to phases: 26
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-05*
