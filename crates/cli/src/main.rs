@@ -3,6 +3,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use docracy_core::document::NewDocument;
+use docracy_core::errors::{CoreError, GovernanceError, RepoError};
 use docracy_core::governance::FsGovernanceSource;
 use docracy_core::ids::{DocumentId, RevisionId};
 use docracy_core::query::QueryInput;
@@ -13,10 +14,23 @@ use docracy_core::{
 };
 use docracy_postgres::PgRepository;
 use serde::de::DeserializeOwned;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::io::Read;
 use std::path::PathBuf;
+
+#[derive(Debug, Serialize)]
+struct CliErrorResponse {
+    error: CliErrorBody,
+}
+
+#[derive(Debug, Serialize)]
+struct CliErrorBody {
+    kind: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    details: Option<Value>,
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "docracy", version, about = "Docracy CLI")]
@@ -86,7 +100,8 @@ struct ReadInput {
 #[derive(Debug, Deserialize)]
 struct UpdateInput {
     id: DocumentId,
-    expected_head: RevisionId,
+    #[serde(alias = "expected_head")]
+    expected_revision: RevisionId,
     content: Option<Value>,
     extensions: Option<Map<String, Value>>,
     status: Option<String>,
@@ -95,12 +110,11 @@ struct UpdateInput {
 #[tokio::main]
 async fn main() {
     if let Err(err) = run().await {
-        let out = json!({
-            "error": err.to_string(),
-        });
+        let out = cli_error_response(&err);
         eprintln!(
             "{}",
-            serde_json::to_string_pretty(&out).unwrap_or_else(|_| out.to_string())
+            serde_json::to_string_pretty(&out)
+                .unwrap_or_else(|_| serde_json::to_string(&out).unwrap())
         );
         std::process::exit(1);
     }
@@ -169,7 +183,7 @@ async fn run() -> Result<()> {
                 &ids,
                 UpdateDocumentInput {
                     id: u.id,
-                    expected_head: u.expected_head,
+                    expected_head: u.expected_revision,
                     content: u.content,
                     extensions: u.extensions,
                     status: u.status,
@@ -215,4 +229,74 @@ fn print_json(v: Value, pretty: bool) -> Result<()> {
     };
     println!("{s}");
     Ok(())
+}
+
+fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
+    if let Some(core_err) = err.downcast_ref::<CoreError>() {
+        return CliErrorResponse {
+            error: match core_err {
+                CoreError::Validation(inner) => CliErrorBody {
+                    kind: "validation_error".to_string(),
+                    message: inner.to_string(),
+                    details: None,
+                },
+                CoreError::Repo(RepoError::Conflict) => CliErrorBody {
+                    kind: "conflict".to_string(),
+                    message: "revision conflict".to_string(),
+                    details: None,
+                },
+                CoreError::Repo(RepoError::Storage(message)) => CliErrorBody {
+                    kind: "storage_error".to_string(),
+                    message: message.clone(),
+                    details: None,
+                },
+                CoreError::Governance(GovernanceError::Io(message)) => CliErrorBody {
+                    kind: "governance_io_error".to_string(),
+                    message: message.clone(),
+                    details: None,
+                },
+                CoreError::Governance(GovernanceError::MissingConstitution) => CliErrorBody {
+                    kind: "missing_constitution".to_string(),
+                    message: "missing CONSTITUTION.md in governance bundle".to_string(),
+                    details: None,
+                },
+                CoreError::DocumentNotFound => CliErrorBody {
+                    kind: "document_not_found".to_string(),
+                    message: core_err.to_string(),
+                    details: None,
+                },
+                CoreError::RevisionNotFound => CliErrorBody {
+                    kind: "revision_not_found".to_string(),
+                    message: core_err.to_string(),
+                    details: None,
+                },
+                CoreError::MissingCurrentRevision => CliErrorBody {
+                    kind: "missing_current_revision".to_string(),
+                    message: core_err.to_string(),
+                    details: None,
+                },
+                CoreError::NoChanges => CliErrorBody {
+                    kind: "no_changes".to_string(),
+                    message: core_err.to_string(),
+                    details: None,
+                },
+                CoreError::RevisionConflict { expected, actual } => CliErrorBody {
+                    kind: "revision_conflict".to_string(),
+                    message: core_err.to_string(),
+                    details: Some(json!({
+                        "expected": expected,
+                        "actual": actual,
+                    })),
+                },
+            },
+        };
+    }
+
+    CliErrorResponse {
+        error: CliErrorBody {
+            kind: "internal_error".to_string(),
+            message: err.to_string(),
+            details: None,
+        },
+    }
 }
