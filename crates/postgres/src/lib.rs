@@ -193,6 +193,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
     async fn update_document_with_revisions(
         &mut self,
         doc: Document,
+        expected_head: RevisionId,
         superseded: DocumentRevision,
         new_rev: DocumentRevision,
     ) -> Result<(), RepoError> {
@@ -201,6 +202,32 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
             .execute(&mut *tx)
             .await
             .map_err(map_sqlx_error)?;
+
+        let current_head = sqlx::query_scalar::<_, Option<Uuid>>(
+            r#"
+SELECT current_revision_id
+FROM documents
+WHERE id = $1
+FOR UPDATE
+            "#,
+        )
+        .bind(doc.id.0)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        let Some(current_head) = current_head else {
+            return Err(RepoError::Storage("update of missing document".to_string()));
+        };
+        let Some(current_head) = current_head else {
+            return Err(RepoError::Storage(
+                "document missing current revision".to_string(),
+            ));
+        };
+
+        if current_head != expected_head.0 {
+            return Err(RepoError::Conflict);
+        }
 
         let updated = sqlx::query(
             r#"

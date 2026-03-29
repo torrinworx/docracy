@@ -82,9 +82,16 @@ impl Repository for MemoryRepository {
     async fn update_document_with_revisions(
         &mut self,
         doc: Document,
+        expected_head: RevisionId,
         superseded: DocumentRevision,
         new_rev: DocumentRevision,
     ) -> Result<(), RepoError> {
+        let Some(existing) = self.documents.get(&doc.id) else {
+            return Err(RepoError::Storage("update of missing document".to_string()));
+        };
+        if existing.current_revision_id != Some(expected_head) {
+            return Err(RepoError::Conflict);
+        }
         self.update_revision_inner(superseded)?;
         self.insert_revision_inner(new_rev)?;
         self.update_document_inner(doc)?;
