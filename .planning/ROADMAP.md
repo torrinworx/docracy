@@ -30,7 +30,7 @@ Deliver a trustworthy, Postgres-backed, versioned document store with a finalize
 Plans:
 - [x] 01-01: Revision OCC + atomic document/revision updates
 - [x] 01-02: Governance init + constitution immutability
-- [ ] 01-03: CLI contract + query/search finalization
+- [x] 01-03: CLI contract + query/search finalization
 
 ### Phase 2: Core Test Harness + Validation
 **Goal**: Users can test the core behavior directly, without going through the CLI, using unit and Postgres-backed integration coverage.

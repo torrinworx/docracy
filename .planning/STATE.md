@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-04-05T20:18:12.853Z"
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-04-05T20:30:19.352Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
+  completed_plans: 3
 ---
 
 # Project State
@@ -47,6 +47,7 @@ Plan: 3 of 3
 
 | Phase 01-cli-mvp-core-finalization P01 | 4 min | 2 tasks | 7 files |
 | Phase 01-cli-mvp-core-finalization P02 | 15 min | 2 tasks | 3 files |
+| Phase 01-cli-mvp-core-finalization P03 | 13 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,9 @@ Recent decisions affecting current work:
 - [Phase 01-cli-mvp-core-finalization]: Keep the in-memory adapter aligned with repository-level OCC checks for local usage and tests.
 - [Phase 01-cli-mvp-core-finalization]: Init repairs constitution state through an internal helper instead of the public update path.
 - [Phase 01-cli-mvp-core-finalization]: Reserved constitution validation is centralized for mutable user input while keeping the stored constitution system-managed.
+- [Phase 01-cli-mvp-core-finalization]: Expose expected_revision in CLI update JSON while preserving expected_head as a backward-compatible alias.
+- [Phase 01-cli-mvp-core-finalization]: Return structured JSON error objects from the CLI instead of plain strings.
+- [Phase 01-cli-mvp-core-finalization]: Keep README query examples explicit about v1 extension-search deferral.
 
 ### Pending Todos
 
@@ -75,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T20:18:12.851Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-04-05T20:30:19.350Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None

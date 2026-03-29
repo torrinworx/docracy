@@ -33,20 +33,20 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **PG-01**: Postgres schema models documents + revisions with constraints enforcing core invariants
 - [x] **PG-02**: Write operations are transactional and atomic (document head + revision updates)
-- [ ] **PG-03**: CLI runs migrations by default; schema evolution is versioned and repeatable
+- [x] **PG-03**: CLI runs migrations by default; schema evolution is versioned and repeatable
 
 ### Query & Search
 
-- [ ] **QRY-01**: Query supports keyword search over document content using Postgres full-text search
-- [ ] **QRY-02**: Query supports filters on `type`, `status`, and time ranges, with stable ordering
-- [ ] **QRY-03**: Query supports pagination with `limit` and `next_cursor`
-- [ ] **QRY-04**: Query does not support searching extensions in v1 (explicitly deferred)
+- [x] **QRY-01**: Query supports keyword search over document content using Postgres full-text search
+- [x] **QRY-02**: Query supports filters on `type`, `status`, and time ranges, with stable ordering
+- [x] **QRY-03**: Query supports pagination with `limit` and `next_cursor`
+- [x] **QRY-04**: Query does not support searching extensions in v1 (explicitly deferred)
 
 ### CLI
 
-- [ ] **CLI-01**: CLI exposes Init/Create/Read/Query/Update commands with JSON I/O
-- [ ] **CLI-02**: CLI is automatable: exits non-zero on errors and prints machine-readable errors
-- [ ] **CLI-03**: CLI config supports `DATABASE_URL` and a `--database-url` override
+- [x] **CLI-01**: CLI exposes Init/Create/Read/Query/Update commands with JSON I/O
+- [x] **CLI-02**: CLI is automatable: exits non-zero on errors and prints machine-readable errors
+- [x] **CLI-03**: CLI config supports `DATABASE_URL` and a `--database-url` override
 
 ### Testing
 
@@ -111,14 +111,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GOV-04 | Phase 1 | Complete |
 | PG-01 | Phase 1 | Complete |
 | PG-02 | Phase 1 | Complete |
-| PG-03 | Phase 1 | Pending |
-| QRY-01 | Phase 1 | Pending |
-| QRY-02 | Phase 1 | Pending |
-| QRY-03 | Phase 1 | Pending |
-| QRY-04 | Phase 1 | Pending |
-| CLI-01 | Phase 1 | Pending |
-| CLI-02 | Phase 1 | Pending |
-| CLI-03 | Phase 1 | Pending |
+| PG-03 | Phase 1 | Complete |
+| QRY-01 | Phase 1 | Complete |
+| QRY-02 | Phase 1 | Complete |
+| QRY-03 | Phase 1 | Complete |
+| QRY-04 | Phase 1 | Complete |
+| CLI-01 | Phase 1 | Complete |
+| CLI-02 | Phase 1 | Complete |
+| CLI-03 | Phase 1 | Complete |
 | TST-01 | Phase 2 | Pending |
 | TST-02 | Phase 2 | Pending |
 | TST-03 | Phase 2 | Pending |

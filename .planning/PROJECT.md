@@ -19,9 +19,10 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - [ ] Versioned documents: type + status + revision history
 - [ ] Postgres document store + migrations
 - [ ] Init returns governance seed docs + active context docs
-- [ ] Create/Read/Update with revision chaining and soft delete/archive semantics
+- [ ] Create/Read/Update with revision chaining, OCC, and soft delete/archive semantics
 - [ ] Query with keyword search, filters, ordering, and pagination
-- [ ] CLI interface and a test harness (unit + integration)
+- [ ] CLI interface finalized for the MVP
+- [ ] Direct-core test harness and integration coverage
 - [ ] Immutable, repo-owned constitution seeded into the DB
 
 ### Out of Scope
@@ -49,6 +50,8 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 | Store documents as revisioned records | Enables auditability and safe concurrent evolution | — Pending |
 | Postgres first; vector DB later | Ship core doc store and query first | — Pending |
 | Constitution is repo-owned + immutable | Prevents agents from rewriting governance | — Pending |
+| Phase 1 finalizes the CLI-backed MVP | Keeps the first delivery focused on the user-facing contract | — Pending |
+| Phase 2 tests the core directly | Keeps validation independent from the CLI surface | — Pending |
 
 ## Evolution
 
