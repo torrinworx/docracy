@@ -65,7 +65,7 @@ Rerunnable init now seeds and repairs the repo-owned constitution without exposi
 1. **Task 1: Make init rerunnable and constitution-safe** - `d498545` (fix)
 2. **Task 2: Reject constitution changes through user-facing document input** - `88f7f37` (refactor)
 
-**Plan metadata:** pending
+**Plan metadata:** `55db50b` (docs)
 
 ## Files Created/Modified
 - `crates/core/src/service.rs` - System-only constitution reconciliation and public update guard.
