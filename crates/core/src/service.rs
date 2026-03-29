@@ -5,6 +5,7 @@ use crate::ids::{DocumentId, RevisionId};
 use crate::query::{encode_cursor, project_rows, QueryInput, QueryResult};
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
+use crate::validation::ValidationError;
 use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 use uuid::Uuid;
@@ -158,6 +159,16 @@ pub async fn update_document(
     ids: &dyn IdGenerator,
     input: UpdateDocumentInput,
 ) -> Result<UpdateDocumentResult, CoreError> {
+    update_document_internal(repo, clock, ids, input, false).await
+}
+
+async fn update_document_internal(
+    repo: &mut dyn Repository,
+    clock: &dyn Clock,
+    ids: &dyn IdGenerator,
+    input: UpdateDocumentInput,
+    allow_constitution: bool,
+) -> Result<UpdateDocumentResult, CoreError> {
     if input.content.is_none() && input.extensions.is_none() && input.status.is_none() {
         return Err(CoreError::NoChanges);
     }
@@ -166,6 +177,9 @@ pub async fn update_document(
         .get_document(input.id)
         .await?
         .ok_or(CoreError::DocumentNotFound)?;
+    if !allow_constitution && doc.doc_type.is_constitution() {
+        return Err(ValidationError::ReservedConstitutionType.into());
+    }
     let current_rev_id = doc
         .current_revision_id
         .ok_or(CoreError::MissingCurrentRevision)?;
@@ -275,7 +289,7 @@ pub async fn init_bundle(
         .ok_or(crate::errors::GovernanceError::MissingConstitution)?
         .content
         .clone();
-    bootstrap_constitution(repo, clock, ids, &constitution_md).await?;
+    reconcile_constitution(repo, clock, ids, &constitution_md).await?;
 
     let context_documents = repo.list_active_context_documents().await?;
     Ok(InitBundleResult {
@@ -284,7 +298,7 @@ pub async fn init_bundle(
     })
 }
 
-async fn bootstrap_constitution(
+async fn reconcile_constitution(
     repo: &mut dyn Repository,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
@@ -292,7 +306,7 @@ async fn bootstrap_constitution(
 ) -> Result<(), CoreError> {
     let expected = Value::String(constitution_md.to_string());
 
-    let mut existing = repo
+    let existing = repo
         .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
         .await?;
 
@@ -334,15 +348,16 @@ async fn bootstrap_constitution(
             Ok(()) => return Ok(()),
             Err(crate::errors::RepoError::Conflict) => {
                 // Another client raced us; fall through to repair logic.
-                existing = repo
-                    .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
-                    .await?;
             }
             Err(e) => return Err(e.into()),
         }
     }
 
-    match existing {
+    match repo
+        .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
+        .await?
+        .or(existing)
+    {
         None => Err(CoreError::Repo(crate::errors::RepoError::Conflict)),
         Some(doc) => {
             let needs_content = doc.content != expected;
@@ -353,7 +368,7 @@ async fn bootstrap_constitution(
                 return Ok(());
             }
 
-            update_document(
+            update_document_internal(
                 repo,
                 clock,
                 ids,
@@ -370,6 +385,7 @@ async fn bootstrap_constitution(
                         None
                     },
                 },
+                true,
             )
             .await?;
             Ok(())
@@ -381,6 +397,7 @@ async fn bootstrap_constitution(
 mod tests {
     use super::*;
     use crate::memory::MemoryRepository;
+    use crate::repository::Repository;
     use crate::DocumentType;
     use crate::QueryInput;
     use chrono::TimeZone;
@@ -515,26 +532,43 @@ mod tests {
 
         let governance = crate::FsGovernanceSource::new(td.path());
 
-        let doc_id = DocumentId(Uuid::from_u128(10));
-        let rev1 = RevisionId(Uuid::from_u128(11));
-        let ids = FixedIds {
-            doc: doc_id,
-            revs: vec![rev1],
-            idx: std::cell::Cell::new(0),
+        let context_doc_id = DocumentId(Uuid::from_u128(10));
+        let constitution_doc_id = DocumentId(Uuid::from_u128(11));
+        let context_rev_id = RevisionId(Uuid::from_u128(12));
+        let constitution_rev_id = RevisionId(Uuid::from_u128(13));
+        let ids = SeqIds {
+            docs: vec![context_doc_id, constitution_doc_id],
+            revs: vec![context_rev_id, constitution_rev_id],
+            doc_idx: std::cell::Cell::new(0),
+            rev_idx: std::cell::Cell::new(0),
         };
 
         let mut repo = MemoryRepository::new();
+        let context = create_document(
+            &mut repo,
+            &clock,
+            &ids,
+            NewDocument {
+                doc_type: DocumentType::new(DocumentType::CONTEXT).unwrap(),
+                content: json!({"kind": "context"}),
+                extensions: Extensions::new(),
+            },
+        )
+        .await
+        .unwrap();
+
         let out = init_bundle(&mut repo, &governance, &clock, &ids)
             .await
             .unwrap();
         assert_eq!(out.governance.files.len(), 1);
+        assert_eq!(out.context_documents, vec![context.document]);
 
         let doc = repo
             .find_latest_document_by_type(DocumentType::CONSTITUTION)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(doc.id, doc_id);
+        assert_eq!(doc.id, constitution_doc_id);
         assert_eq!(doc.status.as_str(), DocumentStatus::ACTIVE);
         assert_eq!(doc.content, Value::String("hello constitution".to_string()));
         let rev = repo
@@ -594,6 +628,68 @@ mod tests {
         assert_eq!(rev.parent_revision_id, Some(rev1));
         let parent = repo.get_revision(rev1).await.unwrap().unwrap();
         assert!(parent.superseded_at.is_some());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn update_document_rejects_constitution_type() {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let clock = FixedClock(now);
+
+        let doc_id = DocumentId(Uuid::from_u128(30));
+        let rev1 = RevisionId(Uuid::from_u128(31));
+        let ids = FixedIds {
+            doc: doc_id,
+            revs: vec![RevisionId(Uuid::from_u128(32))],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        repo.create_document_with_revision(
+            Document {
+                id: doc_id,
+                doc_type: DocumentType::new(DocumentType::CONSTITUTION).unwrap(),
+                status: DocumentStatus::active(),
+                created_at: now,
+                modified_at: now,
+                current_revision_id: Some(rev1),
+                archived_at: None,
+                deleted_at: None,
+                content: json!({"text": "const"}),
+                extensions: Extensions::new(),
+            },
+            DocumentRevision {
+                id: rev1,
+                document_id: doc_id,
+                version: 1,
+                parent_revision_id: None,
+                created_at: now,
+                superseded_at: None,
+                content: json!({"text": "const"}),
+                extensions: Extensions::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let err = update_document(
+            &mut repo,
+            &clock,
+            &ids,
+            UpdateDocumentInput {
+                id: doc_id,
+                expected_head: rev1,
+                content: Some(json!({"text": "changed"})),
+                extensions: None,
+                status: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            err,
+            CoreError::Validation(ValidationError::ReservedConstitutionType)
+        ));
     }
 
     #[tokio::test(flavor = "current_thread")]
