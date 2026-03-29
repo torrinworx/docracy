@@ -19,6 +19,7 @@ pub trait Repository {
     async fn update_document_with_revisions(
         &mut self,
         doc: Document,
+        expected_head: RevisionId,
         superseded: DocumentRevision,
         new_rev: DocumentRevision,
     ) -> Result<(), RepoError>;

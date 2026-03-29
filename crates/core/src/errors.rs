@@ -1,4 +1,5 @@
 use crate::validation::ValidationError;
+use crate::RevisionId;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -41,4 +42,10 @@ pub enum CoreError {
 
     #[error("no changes provided")]
     NoChanges,
+
+    #[error("revision conflict: expected head {expected}, found {actual:?}")]
+    RevisionConflict {
+        expected: RevisionId,
+        actual: Option<RevisionId>,
+    },
 }

@@ -176,6 +176,7 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
         &ids,
         UpdateDocumentInput {
             id: created.document.id,
+            expected_head: created.revision.id,
             content: Some(json!({"a": 2})),
             extensions: None,
             status: None,

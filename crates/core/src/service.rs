@@ -146,6 +146,7 @@ pub struct UpdateDocumentResult {
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateDocumentInput {
     pub id: DocumentId,
+    pub expected_head: RevisionId,
     pub content: Option<Value>,
     pub extensions: Option<Extensions>,
     pub status: Option<String>,
@@ -168,6 +169,13 @@ pub async fn update_document(
     let current_rev_id = doc
         .current_revision_id
         .ok_or(CoreError::MissingCurrentRevision)?;
+
+    if current_rev_id != input.expected_head {
+        return Err(CoreError::RevisionConflict {
+            expected: input.expected_head,
+            actual: Some(current_rev_id),
+        });
+    }
 
     let mut current_rev = repo
         .get_revision(current_rev_id)
@@ -230,8 +238,13 @@ pub async fn update_document(
     }
     doc.validate()?;
 
-    repo.update_document_with_revisions(doc.clone(), current_rev.clone(), new_rev.clone())
-        .await?;
+    repo.update_document_with_revisions(
+        doc.clone(),
+        input.expected_head,
+        current_rev.clone(),
+        new_rev.clone(),
+    )
+    .await?;
 
     Ok(UpdateDocumentResult {
         document: doc,
@@ -346,6 +359,9 @@ async fn bootstrap_constitution(
                 ids,
                 UpdateDocumentInput {
                     id: doc.id,
+                    expected_head: doc
+                        .current_revision_id
+                        .ok_or(CoreError::MissingCurrentRevision)?,
                     content: if needs_content { Some(expected) } else { None },
                     extensions: None,
                     status: if needs_active {
@@ -455,6 +471,7 @@ mod tests {
             &ids,
             UpdateDocumentInput {
                 id: doc_id,
+                expected_head: rev1,
                 content: Some(json!({"a": 2})),
                 extensions: None,
                 status: None,
@@ -467,6 +484,25 @@ mod tests {
         assert_eq!(updated.new_revision.parent_revision_id, Some(rev1));
         assert_eq!(updated.superseded_revision.superseded_at.is_some(), true);
         assert_eq!(updated.document.current_revision_id, Some(rev2));
+
+        let stale = update_document(
+            &mut repo,
+            &FixedClock(now + chrono::Duration::seconds(10)),
+            &ids,
+            UpdateDocumentInput {
+                id: doc_id,
+                expected_head: rev1,
+                content: Some(json!({"a": 3})),
+                extensions: None,
+                status: None,
+            },
+        )
+        .await;
+        assert!(matches!(
+            stale,
+            Err(CoreError::RevisionConflict { expected, actual })
+            if expected == rev1 && actual == Some(rev2)
+        ));
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -612,6 +648,7 @@ mod tests {
             &ids,
             UpdateDocumentInput {
                 id: d2.document.id,
+                expected_head: d2.revision.id,
                 content: None,
                 extensions: None,
                 status: Some(DocumentStatus::ARCHIVED.to_string()),

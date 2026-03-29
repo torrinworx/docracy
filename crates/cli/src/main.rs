@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use docracy_core::document::NewDocument;
 use docracy_core::governance::FsGovernanceSource;
-use docracy_core::ids::DocumentId;
+use docracy_core::ids::{DocumentId, RevisionId};
 use docracy_core::query::QueryInput;
 use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{
@@ -86,6 +86,7 @@ struct ReadInput {
 #[derive(Debug, Deserialize)]
 struct UpdateInput {
     id: DocumentId,
+    expected_head: RevisionId,
     content: Option<Value>,
     extensions: Option<Map<String, Value>>,
     status: Option<String>,
@@ -168,6 +169,7 @@ async fn run() -> Result<()> {
                 &ids,
                 UpdateDocumentInput {
                     id: u.id,
+                    expected_head: u.expected_head,
                     content: u.content,
                     extensions: u.extensions,
                     status: u.status,
