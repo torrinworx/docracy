@@ -2,7 +2,7 @@
 
 ## Overview
 
-Deliver a trustworthy, Postgres-backed, versioned document store (stable document IDs + immutable revision history) with governance seeding, deterministic query/search primitives, and a CLI+tests that lock the tool contract agents depend on.
+Deliver a trustworthy, Postgres-backed, versioned document store with a finalized CLI, immutable governance, deterministic query/search, and a direct-core test harness that locks the contract agents depend on.
 
 ## Phases
 
@@ -10,82 +10,62 @@ Deliver a trustworthy, Postgres-backed, versioned document store (stable documen
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Canonical Document + Revision Store** - Durable docs+revisions in Postgres with atomic writes and OCC.
-- [ ] **Phase 2: Governance Seed + Constitution Immutability** - Init seeds governance/context and prevents constitution mutation.
-- [ ] **Phase 3: Deterministic Query + Keyword Search** - Stable filters/pagination plus Postgres FTS (no extensions search).
-- [ ] **Phase 4: CLI Contract + Test Harness** - JSON CLI surface with machine-readable errors and locked semantics via tests.
+- [ ] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface.
+- [ ] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI.
+- [ ] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps.
 
 ## Phase Details
 
-### Phase 1: Canonical Document + Revision Store
-**Goal**: Users can create/read/update versioned documents safely in Postgres (immutable revision history, deterministic ordering, soft delete/archive, transactional invariants).
+### Phase 1: CLI MVP + Core Finalization
+**Goal**: Users can run the full CLI against Postgres while the core document model, governance seed, revision chain, and query semantics are finalized.
 **Depends on**: Nothing (first phase)
-**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, REV-01, REV-02, REV-03, REV-04, PG-01, PG-02, PG-03
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, REV-01, REV-02, REV-03, REV-04, GOV-01, GOV-02, GOV-03, GOV-04, PG-01, PG-02, PG-03, QRY-01, QRY-02, QRY-03, QRY-04, CLI-01, CLI-02, CLI-03
 **Success Criteria** (what must be TRUE):
-  1. User can create a document and read it by ID, receiving current content, metadata (`type`, `status`, timestamps, `current_revision_id`), and lossless JSON `extensions`.
-  2. User can update a document by providing an expected head/parent revision; a successful update appends a new immutable revision linked to its parent and advances the document head atomically.
-  3. User can read any historical revision by revision ID, and stale concurrent updates are rejected with a clear conflict error (no silent last-write-wins).
-  4. User can archive/delete (soft, reversible) a document without losing history.
+  1. User can create, read, update, and query documents via the CLI with stable JSON input/output.
+  2. User can update a document only when providing the expected head revision; stale writes fail with a clear conflict.
+  3. User can initialize governance deterministically and keep exactly one repo-owned constitution in the database.
+  4. Query results are stable, paginated, and explicit about unsupported `extensions` search in v1.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Postgres schema + migrations enforcing invariants
-- [ ] 01-02: Core create/read/update flows with immutable revision chaining
-- [ ] 01-03: OCC + atomic transactions + lifecycle (archive/delete) semantics
+- [x] 01-01: Revision OCC + atomic document/revision updates
+- [ ] 01-02: Governance init + constitution immutability
+- [ ] 01-03: CLI contract + query/search finalization
 
-### Phase 2: Governance Seed + Constitution Immutability
-**Goal**: Users can initialize a workspace with governance seed docs (including an immutable constitution) and retrieve active context docs.
+### Phase 2: Core Test Harness + Validation
+**Goal**: Users can test the core behavior directly, without going through the CLI, using unit and Postgres-backed integration coverage.
 **Depends on**: Phase 1
-**Requirements**: GOV-01, GOV-02, GOV-03, GOV-04
+**Requirements**: TST-01, TST-02, TST-03
 **Success Criteria** (what must be TRUE):
-  1. User can run Init and receive governance seed documents sourced from `./governance` (including constitution).
-  2. Init is rerunnable and results in exactly one constitution in the DB that matches the repo-owned constitution file; mismatches are surfaced clearly.
-  3. Attempts to create or modify the constitution via supported interfaces are rejected.
-  4. Init returns the active `context` documents from the DB, excluding archived/deleted documents.
+  1. Unit tests exercise core document/revision invariants directly through `docracy_core`.
+  2. Integration tests exercise migrations, Postgres persistence, and init seeding without the CLI.
+  3. Query/search semantics are locked through core-level assertions and fixtures.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Init seeding (governance + context) with rerunnable behavior
-- [ ] 02-02: Constitution immutability enforcement (API/CLI guards + DB constraints where appropriate)
+- [ ] 02-01: Core test harness scaffolding
+- [ ] 02-02: Postgres integration coverage for core flows
 
-### Phase 3: Deterministic Query + Keyword Search
-**Goal**: Users can deterministically retrieve documents via filters, stable ordering, cursor pagination, and keyword search over content.
+### Phase 3: Stabilization + Gap Closure
+**Goal**: The implementation is hardened against issues found during validation, and remaining rough edges are cleaned up.
 **Depends on**: Phase 2
-**Requirements**: QRY-01, QRY-02, QRY-03, QRY-04
+**Requirements**: None new; this phase is driven by validation findings.
 **Success Criteria** (what must be TRUE):
-  1. User can query documents with filters on `type`, `status`, and time ranges and receive results in a stable ordering.
-  2. User can paginate results with `limit` and `next_cursor` without duplicates or gaps (on a stable dataset).
-  3. User can keyword-search over document content using Postgres full-text search and receive matching documents.
-  4. If a user attempts to search/filter on `extensions`, the system clearly indicates it is not supported in v1.
-**Plans**: 2 plans
+  1. Validation gaps are either fixed in code or codified in tests.
+  2. The core behavior remains stable across repeated test runs.
+  3. No known implementation blockers remain for the CLI-backed core MVP.
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Query filters + stable ordering + cursor pagination
-- [ ] 03-02: Postgres FTS keyword search over defined fields
-
-### Phase 4: CLI Contract + Test Harness
-**Goal**: Users can automate Docracy via a stable JSON CLI (Init/Create/Read/Query/Update) with machine-readable errors and a test suite that locks behavior.
-**Depends on**: Phase 3
-**Requirements**: CLI-01, CLI-02, CLI-03, TST-01, TST-02, TST-03
-**Success Criteria** (what must be TRUE):
-  1. User can run `init`, `create`, `read`, `update`, and `query` via CLI with JSON I/O.
-  2. On failures (including conflicts), CLI exits non-zero and prints machine-readable error output.
-  3. User can configure the CLI with `DATABASE_URL` and override it with `--database-url`.
-  4. User can run unit + integration tests that cover revision invariants, migrations+Postgres persistence+init seeding, and query/search semantics (filters, ordering, pagination).
-**Plans**: 2 plans
-
-Plans:
-- [ ] 04-01: CLI command surface + JSON/error contract
-- [ ] 04-02: Unit + integration test harness locking semantics
+- [ ] 03-01: Validation-driven hardening and gap closure
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Document + Revision Store | 0/3 | Not started | - |
-| 2. Governance Seed + Constitution Immutability | 0/2 | Not started | - |
-| 3. Deterministic Query + Keyword Search | 0/2 | Not started | - |
-| 4. CLI Contract + Test Harness | 0/2 | Not started | - |
+| 1. CLI MVP + Core Finalization | 0/3 | Not started | - |
+| 2. Core Test Harness + Validation | 0/2 | Not started | - |
+| 3. Stabilization + Gap Closure | 0/1 | Not started | - |

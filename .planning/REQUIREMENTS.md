@@ -9,18 +9,18 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Documents
 
-- [ ] **DOC-01**: System can create a document with a stable ID and an initial revision
+- [x] **DOC-01**: System can create a document with a stable ID and an initial revision
 - [ ] **DOC-02**: System can read a document by ID and return current content, extensions, and metadata
-- [ ] **DOC-03**: Document metadata includes `type`, `status`, `created`, `modified`, and `current_revision_id`
+- [x] **DOC-03**: Document metadata includes `type`, `status`, `created`, `modified`, and `current_revision_id`
 - [ ] **DOC-04**: Documents support lifecycle flags for archive/delete (soft delete, reversible)
 - [ ] **DOC-05**: Documents store and return arbitrary JSON `extensions` losslessly
 
 ### Revisions & Concurrency
 
-- [ ] **REV-01**: Every update appends an immutable revision linked to a parent revision
-- [ ] **REV-02**: System can read any historical revision by revision ID
-- [ ] **REV-03**: Update requires an expected parent/head revision and rejects stale writes (conflict)
-- [ ] **REV-04**: Revision ordering is deterministic (parent pointers/version counters; timestamps are metadata)
+- [x] **REV-01**: Every update appends an immutable revision linked to a parent revision
+- [x] **REV-02**: System can read any historical revision by revision ID
+- [x] **REV-03**: Update requires an expected parent/head revision and rejects stale writes (conflict)
+- [x] **REV-04**: Revision ordering is deterministic (parent pointers/version counters; timestamps are metadata)
 
 ### Governance & Init
 
@@ -31,8 +31,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Storage & Migrations (Postgres)
 
-- [ ] **PG-01**: Postgres schema models documents + revisions with constraints enforcing core invariants
-- [ ] **PG-02**: Write operations are transactional and atomic (document head + revision updates)
+- [x] **PG-01**: Postgres schema models documents + revisions with constraints enforcing core invariants
+- [x] **PG-02**: Write operations are transactional and atomic (document head + revision updates)
 - [ ] **PG-03**: CLI runs migrations by default; schema evolution is versioned and repeatable
 
 ### Query & Search
@@ -96,37 +96,41 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | Phase 1 | Pending |
+| DOC-01 | Phase 1 | Complete |
 | DOC-02 | Phase 1 | Pending |
-| DOC-03 | Phase 1 | Pending |
+| DOC-03 | Phase 1 | Complete |
 | DOC-04 | Phase 1 | Pending |
 | DOC-05 | Phase 1 | Pending |
-| REV-01 | Phase 1 | Pending |
-| REV-02 | Phase 1 | Pending |
-| REV-03 | Phase 1 | Pending |
-| REV-04 | Phase 1 | Pending |
-| GOV-01 | Phase 2 | Pending |
-| GOV-02 | Phase 2 | Pending |
-| GOV-03 | Phase 2 | Pending |
-| GOV-04 | Phase 2 | Pending |
-| PG-01 | Phase 1 | Pending |
-| PG-02 | Phase 1 | Pending |
+| REV-01 | Phase 1 | Complete |
+| REV-02 | Phase 1 | Complete |
+| REV-03 | Phase 1 | Complete |
+| REV-04 | Phase 1 | Complete |
+| GOV-01 | Phase 1 | Pending |
+| GOV-02 | Phase 1 | Pending |
+| GOV-03 | Phase 1 | Pending |
+| GOV-04 | Phase 1 | Pending |
+| PG-01 | Phase 1 | Complete |
+| PG-02 | Phase 1 | Complete |
 | PG-03 | Phase 1 | Pending |
-| QRY-01 | Phase 3 | Pending |
-| QRY-02 | Phase 3 | Pending |
-| QRY-03 | Phase 3 | Pending |
-| QRY-04 | Phase 3 | Pending |
-| CLI-01 | Phase 4 | Pending |
-| CLI-02 | Phase 4 | Pending |
-| CLI-03 | Phase 4 | Pending |
-| TST-01 | Phase 4 | Pending |
-| TST-02 | Phase 4 | Pending |
-| TST-03 | Phase 4 | Pending |
+| QRY-01 | Phase 1 | Pending |
+| QRY-02 | Phase 1 | Pending |
+| QRY-03 | Phase 1 | Pending |
+| QRY-04 | Phase 1 | Pending |
+| CLI-01 | Phase 1 | Pending |
+| CLI-02 | Phase 1 | Pending |
+| CLI-03 | Phase 1 | Pending |
+| TST-01 | Phase 2 | Pending |
+| TST-02 | Phase 2 | Pending |
+| TST-03 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 26 total
 - Mapped to phases: 26
 - Unmapped: 0
+
+### Notes
+
+- Phase 3 is a stabilization loop and does not introduce new requirement IDs.
 
 ---
 *Requirements defined: 2026-04-05*
