@@ -12,6 +12,7 @@ Think of this system as a database for google doc style documents. Each individu
 
 - **Init**, to agents: 'load this to learn how the system works. The user has installed this system to manage data via agentic driven beuracracy. Run this tool before proceeding further in the chat. it will provide vital context about the user.'
 - **Create**, allow agent to create a refined document, pass it in, and store it in the postgresql document db.
+- **CLI contract**, all commands speak JSON on stdin/stdout; failures emit structured JSON on stderr and exit non-zero.
 
 
 
@@ -53,11 +54,11 @@ extensions: {
 	// Other things.
 }
 ```
-^ all of these would be indexable and queriable so that queries can happen really quickly. 
+^ in v1 these are stored and returned, but extension-field search/filtering is deferred until governance defines a policy.
 
-The goal with these is to extend the document system, such that the llms can query via indexable entries that they themselves create depending on the repository or task at hand they are dealing with.
+The goal with these is to extend the document system, such that the llms can attach repository/task metadata that later phases may choose to index and query.
 
-They can then outline both how to define these in the documents extensions on the Create request, and how to query for them in the Read function call.
+They can then outline how to define these in the document extensions on the Create request and how to surface them in Read responses.
 
 The agents, whenever they come accross a need for it, would create new extensions fields for each document stored along side it in the database. Agents would then update the 'context' documents to dictate how the new fields would work and how to use them to other agents, all of this would follow the same framework and logical requirenments as the constitution would state for updating the 'context' documents. 
 
@@ -220,7 +221,7 @@ suggested development phases to follow:
 2. Define the 'core' library, struct/class thingy. This should be extensible and define all the types and stuff. (need to keep in mind the core logic needs to be agnostic from a database, since we want to store and parity data in things like vectordbs in the future).
 3. Create the 'Init' function, should simply return the local ./governance md files, as well as any active type = 'context' documents found in the database that aren't archived or deleted.
 4. 'Create' function, takes parameters for creating a document. Lets the LLMs define the type, content, and extensions of a document. 'constitution' type is a system locked type, agents should never be allowed to create one.
-5. 'Query' function, sql style SELECT, WHERE, ORDER BY, LIMIT, tool. Use SQL-shaped parameter names so it feels familiar to llms:
+5. 'Query' function, sql style SELECT, WHERE, ORDER BY, LIMIT, tool. Use SQL-shaped parameter names so it feels familiar to llms. Extension-field search is intentionally deferred in v1:
 ```json
 {
   "query": "postgres migration design",
@@ -228,9 +229,7 @@ suggested development phases to follow:
     "type": ["decision", "context", "general"],
     "status": ["active"],
     "archived": false,
-    "created_gte": "2026-01-01T00:00:00Z",
-    "extensions.repo_files.contains": ["./backend/index.js"],
-    "extensions.commits.contains": ["abc123"]
+    "created_gte": "2026-01-01T00:00:00Z"
   },
   "order_by": [
     { "field": "modified", "direction": "desc" }
@@ -242,8 +241,7 @@ suggested development phases to follow:
     "created",
     "modified",
     "title",
-    "summary",
-    "extensions.repo_files"
+    "summary"
   ],
   "limit": 10,
 }
@@ -262,5 +260,15 @@ This should return:
 }
 ```
 7. 'Update' function, create a revision abstraction tool that updates a given document while storing previous revision history with 'superceeded' state.
+```json
+{
+  "id": "doc_123",
+  "expected_revision": "rev_789",
+  "content": {"title": "Updated doc"},
+  "extensions": {"repo_files": ["./backend/index.js"]},
+  "status": "active"
+}
+```
+If the expected revision is stale, the CLI returns structured JSON like `{"error":{"kind":"revision_conflict",...}}` and exits non-zero.
 8. Add the test harness.
 9. Add CLI.
