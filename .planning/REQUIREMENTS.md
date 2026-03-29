@@ -10,10 +10,10 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Documents
 
 - [x] **DOC-01**: System can create a document with a stable ID and an initial revision
-- [ ] **DOC-02**: System can read a document by ID and return current content, extensions, and metadata
+- [x] **DOC-02**: System can read a document by ID and return current content, extensions, and metadata
 - [x] **DOC-03**: Document metadata includes `type`, `status`, `created`, `modified`, and `current_revision_id`
-- [ ] **DOC-04**: Documents support lifecycle flags for archive/delete (soft delete, reversible)
-- [ ] **DOC-05**: Documents store and return arbitrary JSON `extensions` losslessly
+- [x] **DOC-04**: Documents support lifecycle flags for archive/delete (soft delete, reversible)
+- [x] **DOC-05**: Documents store and return arbitrary JSON `extensions` losslessly
 
 ### Revisions & Concurrency
 
@@ -24,10 +24,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Governance & Init
 
-- [ ] **GOV-01**: Init returns governance seed documents from `./governance` (including constitution)
-- [ ] **GOV-02**: Constitution is repo-owned and immutable; init ensures DB has exactly one constitution matching the repo file
-- [ ] **GOV-03**: Init returns active `context` documents from the DB (excluding archived/deleted)
-- [ ] **GOV-04**: Interfaces prevent agents from creating or modifying the constitution
+- [x] **GOV-01**: Init returns governance seed documents from `./governance` (including constitution)
+- [x] **GOV-02**: Constitution is repo-owned and immutable; init ensures DB has exactly one constitution matching the repo file
+- [x] **GOV-03**: Init returns active `context` documents from the DB (excluding archived/deleted)
+- [x] **GOV-04**: Interfaces prevent agents from creating or modifying the constitution
 
 ### Storage & Migrations (Postgres)
 
@@ -97,18 +97,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DOC-01 | Phase 1 | Complete |
-| DOC-02 | Phase 1 | Pending |
+| DOC-02 | Phase 1 | Complete |
 | DOC-03 | Phase 1 | Complete |
-| DOC-04 | Phase 1 | Pending |
-| DOC-05 | Phase 1 | Pending |
+| DOC-04 | Phase 1 | Complete |
+| DOC-05 | Phase 1 | Complete |
 | REV-01 | Phase 1 | Complete |
 | REV-02 | Phase 1 | Complete |
 | REV-03 | Phase 1 | Complete |
 | REV-04 | Phase 1 | Complete |
-| GOV-01 | Phase 1 | Pending |
-| GOV-02 | Phase 1 | Pending |
-| GOV-03 | Phase 1 | Pending |
-| GOV-04 | Phase 1 | Pending |
+| GOV-01 | Phase 1 | Complete |
+| GOV-02 | Phase 1 | Complete |
+| GOV-03 | Phase 1 | Complete |
+| GOV-04 | Phase 1 | Complete |
 | PG-01 | Phase 1 | Complete |
 | PG-02 | Phase 1 | Complete |
 | PG-03 | Phase 1 | Pending |

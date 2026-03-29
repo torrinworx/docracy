@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-04-05T20:12:44.997Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-04-05T20:18:12.853Z"
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-04-05)
 ## Current Position
 
 Phase: 01 (cli-mvp-core-finalization) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -46,6 +46,7 @@ Plan: 2 of 3
 - Trend: -
 
 | Phase 01-cli-mvp-core-finalization P01 | 4 min | 2 tasks | 7 files |
+| Phase 01-cli-mvp-core-finalization P02 | 15 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -61,6 +62,8 @@ Recent decisions affecting current work:
 - [Phase 01-cli-mvp-core-finalization]: Use an explicit RevisionConflict core error to report stale heads with expected/actual context.
 - [Phase 01-cli-mvp-core-finalization]: Check the persisted head inside the Postgres transaction before writing revisions.
 - [Phase 01-cli-mvp-core-finalization]: Keep the in-memory adapter aligned with repository-level OCC checks for local usage and tests.
+- [Phase 01-cli-mvp-core-finalization]: Init repairs constitution state through an internal helper instead of the public update path.
+- [Phase 01-cli-mvp-core-finalization]: Reserved constitution validation is centralized for mutable user input while keeping the stored constitution system-managed.
 
 ### Pending Todos
 
@@ -72,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-05T20:12:44.996Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-04-05T20:18:12.851Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
