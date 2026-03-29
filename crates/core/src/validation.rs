@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::document::DocumentType;
+
 pub type ValidationResult<T> = Result<T, ValidationError>;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -53,4 +55,27 @@ pub(crate) fn validate_slug(field: &'static str, value: &str) -> ValidationResul
     }
 
     Ok(())
+}
+
+pub(crate) fn validate_mutable_document_type(doc_type: &DocumentType) -> ValidationResult<()> {
+    if doc_type.is_constitution() {
+        return Err(ValidationError::ReservedConstitutionType);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::DocumentType;
+
+    #[test]
+    fn validate_mutable_document_type_rejects_constitution() {
+        let doc_type = DocumentType::new(DocumentType::CONSTITUTION).unwrap();
+        assert_eq!(
+            validate_mutable_document_type(&doc_type).unwrap_err(),
+            ValidationError::ReservedConstitutionType
+        );
+    }
 }

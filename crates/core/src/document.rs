@@ -1,5 +1,7 @@
 use crate::ids::{DocumentId, RevisionId};
-use crate::validation::{validate_slug, ValidationError, ValidationResult};
+use crate::validation::{
+    validate_mutable_document_type, validate_slug, ValidationError, ValidationResult,
+};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -147,9 +149,7 @@ pub struct NewDocument {
 impl NewDocument {
     /// Validation appropriate for agent-supplied input.
     pub fn validate(&self) -> ValidationResult<()> {
-        if self.doc_type.is_constitution() {
-            return Err(ValidationError::ReservedConstitutionType);
-        }
+        validate_mutable_document_type(&self.doc_type)?;
         if self.content.is_null() {
             return Err(ValidationError::ContentNull);
         }
