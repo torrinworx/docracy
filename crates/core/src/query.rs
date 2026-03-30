@@ -375,3 +375,126 @@ fn parse_rfc3339(field: &'static str, v: &Value) -> ValidationResult<DateTime<Ut
         .with_timezone(&Utc);
     Ok(dt)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::{Document, DocumentStatus, DocumentType};
+    use crate::ids::{DocumentId, RevisionId};
+    use chrono::TimeZone;
+    use serde_json::json;
+
+    fn document(id: u128, status: &str) -> Document {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        Document {
+            id: DocumentId(uuid::Uuid::from_u128(id)),
+            doc_type: DocumentType::new("general").unwrap(),
+            status: DocumentStatus::new(status).unwrap(),
+            created_at: now,
+            modified_at: now,
+            current_revision_id: Some(RevisionId(uuid::Uuid::from_u128(id + 100))),
+            archived_at: if status == DocumentStatus::ARCHIVED {
+                Some(now)
+            } else {
+                None
+            },
+            deleted_at: if status == DocumentStatus::DELETED {
+                Some(now)
+            } else {
+                None
+            },
+            content: json!({"title": format!("doc-{id}")}),
+            extensions: Map::from_iter([(String::from("title"), json!(format!("doc-{id}")))]),
+        }
+    }
+
+    #[test]
+    fn parse_defaults_to_active_only() {
+        let (query, _, applied_where) = QueryInput::default().parse().unwrap();
+
+        assert_eq!(
+            query.statuses,
+            Some(vec![DocumentStatus::ACTIVE.to_string()])
+        );
+        assert_eq!(query.archived, None);
+        assert_eq!(query.deleted, None);
+        assert_eq!(
+            applied_where.get("status").unwrap(),
+            &json!([DocumentStatus::ACTIVE])
+        );
+    }
+
+    #[test]
+    fn parse_keeps_explicit_archived_and_deleted_filters() {
+        let mut where_ = Map::new();
+        where_.insert("archived".to_string(), Value::Bool(true));
+        where_.insert("deleted".to_string(), Value::Bool(false));
+
+        let (query, _, applied_where) = QueryInput {
+            where_,
+            ..Default::default()
+        }
+        .parse()
+        .unwrap();
+
+        assert_eq!(query.statuses, None);
+        assert_eq!(query.archived, Some(true));
+        assert_eq!(query.deleted, Some(false));
+        assert!(applied_where.get("status").is_none());
+    }
+
+    #[test]
+    fn parse_rejects_extension_filters() {
+        let mut where_ = Map::new();
+        where_.insert(
+            "extensions.title".to_string(),
+            Value::String("x".to_string()),
+        );
+
+        let err = QueryInput {
+            where_,
+            ..Default::default()
+        }
+        .parse()
+        .unwrap_err();
+
+        assert_eq!(err, ValidationError::InvalidSlug { field: "where" });
+    }
+
+    #[test]
+    fn cursor_round_trips_and_projection_is_stable() {
+        let cursor = DocumentQueryCursor {
+            ts: Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap(),
+            id: DocumentId(uuid::Uuid::from_u128(42)),
+        };
+        let encoded = encode_cursor(&cursor);
+        assert_eq!(decode_cursor(&encoded).unwrap(), cursor);
+
+        let rows = project_rows(
+            &[
+                document(1, DocumentStatus::ACTIVE),
+                document(2, DocumentStatus::ARCHIVED),
+            ],
+            &[
+                SelectField::Id,
+                SelectField::Status,
+                SelectField::Title,
+                SelectField::Extensions,
+            ],
+        );
+
+        assert_eq!(
+            rows[0].get("id").unwrap(),
+            &json!(DocumentId(uuid::Uuid::from_u128(1)).to_string())
+        );
+        assert_eq!(
+            rows[0].get("status").unwrap(),
+            &json!(DocumentStatus::ACTIVE)
+        );
+        assert_eq!(rows[0].get("title").unwrap(), &json!("doc-1"));
+        assert_eq!(
+            rows[0].get("extensions").unwrap(),
+            &json!({"title":"doc-1"})
+        );
+    }
+}

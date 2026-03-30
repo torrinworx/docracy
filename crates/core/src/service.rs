@@ -405,50 +405,100 @@ mod tests {
     use serde_json::{Map, Value};
     use tempfile::TempDir;
 
-    #[derive(Debug, Clone, Copy)]
-    struct FixedClock(DateTime<Utc>);
-    impl Clock for FixedClock {
-        fn now(&self) -> DateTime<Utc> {
-            self.0
+    mod fixtures {
+        use super::*;
+
+        #[derive(Debug, Clone, Copy)]
+        pub(super) struct FixedClock(pub(super) DateTime<Utc>);
+
+        impl Clock for FixedClock {
+            fn now(&self) -> DateTime<Utc> {
+                self.0
+            }
+        }
+
+        #[derive(Debug)]
+        pub(super) struct FixedIds {
+            pub(super) doc: DocumentId,
+            pub(super) revs: Vec<RevisionId>,
+            pub(super) idx: std::cell::Cell<usize>,
+        }
+
+        impl IdGenerator for FixedIds {
+            fn new_document_id(&self) -> DocumentId {
+                self.doc
+            }
+
+            fn new_revision_id(&self) -> RevisionId {
+                let i = self.idx.get();
+                self.idx.set(i + 1);
+                self.revs[i]
+            }
+        }
+
+        #[derive(Debug)]
+        pub(super) struct SeqIds {
+            pub(super) docs: Vec<DocumentId>,
+            pub(super) revs: Vec<RevisionId>,
+            pub(super) doc_idx: std::cell::Cell<usize>,
+            pub(super) rev_idx: std::cell::Cell<usize>,
+        }
+
+        impl IdGenerator for SeqIds {
+            fn new_document_id(&self) -> DocumentId {
+                let i = self.doc_idx.get();
+                self.doc_idx.set(i + 1);
+                self.docs[i]
+            }
+
+            fn new_revision_id(&self) -> RevisionId {
+                let i = self.rev_idx.get();
+                self.rev_idx.set(i + 1);
+                self.revs[i]
+            }
+        }
+
+        pub(super) fn new_document(content: Value) -> NewDocument {
+            NewDocument {
+                doc_type: DocumentType::new("general").unwrap(),
+                content,
+                extensions: Extensions::new(),
+            }
+        }
+
+        pub(super) fn seeded_document(
+            id: DocumentId,
+            revision_id: RevisionId,
+            created_at: DateTime<Utc>,
+            content: Value,
+        ) -> (Document, DocumentRevision) {
+            let document = Document {
+                id,
+                doc_type: DocumentType::new("general").unwrap(),
+                status: DocumentStatus::active(),
+                created_at,
+                modified_at: created_at,
+                current_revision_id: Some(revision_id),
+                archived_at: None,
+                deleted_at: None,
+                content: content.clone(),
+                extensions: Extensions::new(),
+            };
+            let revision = DocumentRevision {
+                id: revision_id,
+                document_id: id,
+                version: 1,
+                parent_revision_id: None,
+                created_at,
+                superseded_at: None,
+                content,
+                extensions: Extensions::new(),
+            };
+            (document, revision)
         }
     }
 
-    #[derive(Debug)]
-    struct FixedIds {
-        doc: DocumentId,
-        revs: Vec<RevisionId>,
-        idx: std::cell::Cell<usize>,
-    }
-    impl IdGenerator for FixedIds {
-        fn new_document_id(&self) -> DocumentId {
-            self.doc
-        }
-        fn new_revision_id(&self) -> RevisionId {
-            let i = self.idx.get();
-            self.idx.set(i + 1);
-            self.revs[i]
-        }
-    }
-
-    #[derive(Debug)]
-    struct SeqIds {
-        docs: Vec<DocumentId>,
-        revs: Vec<RevisionId>,
-        doc_idx: std::cell::Cell<usize>,
-        rev_idx: std::cell::Cell<usize>,
-    }
-    impl IdGenerator for SeqIds {
-        fn new_document_id(&self) -> DocumentId {
-            let i = self.doc_idx.get();
-            self.doc_idx.set(i + 1);
-            self.docs[i]
-        }
-        fn new_revision_id(&self) -> RevisionId {
-            let i = self.rev_idx.get();
-            self.rev_idx.set(i + 1);
-            self.revs[i]
-        }
-    }
+    use fixtures::{seeded_document, FixedClock, FixedIds, SeqIds};
 
     #[tokio::test(flavor = "current_thread")]
     async fn create_then_update_creates_revision_chain() {
@@ -469,11 +519,7 @@ mod tests {
             &mut repo,
             &clock,
             &ids,
-            NewDocument {
-                doc_type: DocumentType::new("general").unwrap(),
-                content: json!({"a": 1}),
-                extensions: Extensions::new(),
-            },
+            fixtures::new_document(json!({"a": 1})),
         )
         .await
         .unwrap();
@@ -644,29 +690,13 @@ mod tests {
         };
 
         let mut repo = MemoryRepository::new();
+        let (document, revision) = seeded_document(doc_id, rev1, now, json!({"text": "const"}));
         repo.create_document_with_revision(
             Document {
-                id: doc_id,
                 doc_type: DocumentType::new(DocumentType::CONSTITUTION).unwrap(),
-                status: DocumentStatus::active(),
-                created_at: now,
-                modified_at: now,
-                current_revision_id: Some(rev1),
-                archived_at: None,
-                deleted_at: None,
-                content: json!({"text": "const"}),
-                extensions: Extensions::new(),
+                ..document
             },
-            DocumentRevision {
-                id: rev1,
-                document_id: doc_id,
-                version: 1,
-                parent_revision_id: None,
-                created_at: now,
-                superseded_at: None,
-                content: json!({"text": "const"}),
-                extensions: Extensions::new(),
-            },
+            revision,
         )
         .await
         .unwrap();
@@ -715,11 +745,7 @@ mod tests {
             &mut repo,
             &FixedClock(t0),
             &ids,
-            NewDocument {
-                doc_type: DocumentType::new("general").unwrap(),
-                content: json!({"text": "hello"}),
-                extensions: Extensions::new(),
-            },
+            fixtures::new_document(json!({"text": "hello"})),
         )
         .await
         .unwrap();
@@ -728,11 +754,7 @@ mod tests {
             &mut repo,
             &FixedClock(t0 + chrono::Duration::seconds(1)),
             &ids,
-            NewDocument {
-                doc_type: DocumentType::new("general").unwrap(),
-                content: json!({"text": "bye"}),
-                extensions: Extensions::new(),
-            },
+            fixtures::new_document(json!({"text": "bye"})),
         )
         .await
         .unwrap();
