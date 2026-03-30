@@ -221,7 +221,7 @@ suggested development phases to follow:
 2. Define the 'core' library, struct/class thingy. This should be extensible and define all the types and stuff. (need to keep in mind the core logic needs to be agnostic from a database, since we want to store and parity data in things like vectordbs in the future).
 3. Create the 'Init' function, should simply return the local ./governance md files, as well as any active type = 'context' documents found in the database that aren't archived or deleted.
 4. 'Create' function, takes parameters for creating a document. Lets the LLMs define the type, content, and extensions of a document. 'constitution' type is a system locked type, agents should never be allowed to create one.
-5. 'Query' function, sql style SELECT, WHERE, ORDER BY, LIMIT, tool. Use SQL-shaped parameter names so it feels familiar to llms. Extension-field search is intentionally deferred in v1:
+5. 'Query' function, sql style SELECT, WHERE, ORDER BY, LIMIT, tool. Use SQL-shaped parameter names so it feels familiar to llms. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1:
 ```json
 {
   "query": "postgres migration design",
@@ -252,13 +252,13 @@ This should return:
 - which filters were applied
 - maybe a next_cursor
 
-6. 'Read' function, this fetches the full contents of documents:
+6. 'Read' function, this fetches the full contents of documents. The request payload is just `ids`:
 ```json
 {
-  "ids": ["doc_123", "doc_456"],
-  "include": ["content", "extensions"]
+  "ids": ["doc_123", "doc_456"]
 }
 ```
+The CLI returns the stored document payloads; there is no `include` field in v1.
 7. 'Update' function, create a revision abstraction tool that updates a given document while storing previous revision history with 'superceeded' state.
 ```json
 {
