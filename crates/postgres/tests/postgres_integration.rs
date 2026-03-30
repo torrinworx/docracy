@@ -18,6 +18,65 @@ fn database_url() -> Option<String> {
         .or_else(|| std::env::var("DATABASE_URL").ok())
 }
 
+fn unique_schema_name() -> String {
+    format!("docracy_test_{}", Uuid::new_v4().simple())
+}
+
+struct SchemaGuard {
+    admin_pool: sqlx::postgres::PgPool,
+    schema: String,
+}
+
+impl SchemaGuard {
+    async fn create(url: &str, schema: String) -> Self {
+        let admin_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(url)
+            .await
+            .unwrap();
+
+        let create_schema_sql = format!("CREATE SCHEMA \"{}\"", schema);
+        sqlx::query(&create_schema_sql)
+            .execute(&admin_pool)
+            .await
+            .unwrap();
+
+        Self { admin_pool, schema }
+    }
+}
+
+impl Drop for SchemaGuard {
+    fn drop(&mut self) {
+        let schema = self.schema.clone();
+        let admin_pool = self.admin_pool.clone();
+        let _ = tokio::runtime::Handle::current().block_on(async move {
+            let sql = format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema);
+            let _ = sqlx::query(&sql).execute(&admin_pool).await;
+        });
+    }
+}
+
+async fn isolated_repo(url: &str) -> (PgRepository, SchemaGuard) {
+    let schema = unique_schema_name();
+    let _schema_guard = SchemaGuard::create(url, schema.clone()).await;
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .after_connect(move |conn, _meta| {
+            let schema = schema.clone();
+            Box::pin(async move {
+                let sql = format!("SET search_path TO \"{}\", public", schema);
+                sqlx::query(&sql).execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect(url)
+        .await
+        .unwrap();
+
+    (PgRepository::new(pool), _schema_guard)
+}
+
 #[tokio::test]
 async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     let Some(url) = database_url() else {
@@ -25,58 +84,7 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
         return;
     };
 
-    let schema = format!("docracy_test_{}", Uuid::new_v4().simple());
-
-    struct SchemaGuard {
-        admin_pool: sqlx::postgres::PgPool,
-        schema: String,
-    }
-    impl Drop for SchemaGuard {
-        fn drop(&mut self) {
-            let schema = self.schema.clone();
-            let admin_pool = self.admin_pool.clone();
-            // Best-effort cleanup.
-            let _ = tokio::runtime::Handle::current().block_on(async move {
-                let sql = format!("DROP SCHEMA IF EXISTS \"{}\" CASCADE", schema);
-                let _ = sqlx::query(&sql).execute(&admin_pool).await;
-            });
-        }
-    }
-
-    // Create schema using a one-off connection.
-    let admin_pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(&url)
-        .await
-        .unwrap();
-    let create_schema_sql = format!("CREATE SCHEMA \"{}\"", schema);
-    sqlx::query(&create_schema_sql)
-        .execute(&admin_pool)
-        .await
-        .unwrap();
-
-    let _schema_guard = SchemaGuard {
-        admin_pool: admin_pool.clone(),
-        schema: schema.clone(),
-    };
-
-    // Pool that always uses our schema.
-    let schema_for_connect = schema.clone();
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .after_connect(move |conn, _meta| {
-            let schema = schema_for_connect.clone();
-            Box::pin(async move {
-                let sql = format!("SET search_path TO \"{}\", public", schema);
-                sqlx::query(&sql).execute(conn).await?;
-                Ok(())
-            })
-        })
-        .connect(&url)
-        .await
-        .unwrap();
-
-    let repo = PgRepository::new(pool);
+    let (repo, _schema_guard) = isolated_repo(&url).await;
     repo.migrate().await.unwrap();
 
     let td = TempDir::new().unwrap();
@@ -213,10 +221,45 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     )
     .await
     .unwrap();
-    let ids: Vec<String> = out
+    let found_ids: Vec<String> = out
         .rows
         .iter()
         .map(|r| r.get("id").unwrap().as_str().unwrap().to_string())
         .collect();
-    assert!(ids.contains(&created.document.id.to_string()));
+    assert!(found_ids.contains(&created.document.id.to_string()));
+
+    let archived = update_document(
+        &mut repo,
+        &clock,
+        &ids,
+        UpdateDocumentInput {
+            id: created.document.id,
+            expected_head: created.revision.id,
+            content: None,
+            extensions: None,
+            status: Some(DocumentStatus::ARCHIVED.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let mut where_ = Map::new();
+    where_.insert("archived".to_string(), json!(true));
+    let archived_out = query_documents(
+        &repo,
+        QueryInput {
+            query: None,
+            where_,
+            order_by: vec![],
+            select: vec!["id".to_string(), "status".to_string()],
+            limit: Some(10),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(archived_out.rows.len(), 1);
+    assert_eq!(archived_out.rows[0].get("id").unwrap().as_str().unwrap(), created.document.id.to_string());
+    assert_eq!(archived_out.rows[0].get("status").unwrap(), &json!(DocumentStatus::ARCHIVED));
+    assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
 }
