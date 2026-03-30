@@ -11,7 +11,7 @@ Deliver a trustworthy, Postgres-backed, versioned document store with a finalize
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [ ] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface.
-- [ ] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI.
+- [x] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI. (completed 2026-04-05)
 - [ ] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps.
 
 ## Phase Details
@@ -43,8 +43,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Core test harness scaffolding
-- [ ] 02-02: Postgres integration coverage for core flows
+- [x] 02-01: Core test harness scaffolding
+- [x] 02-02: Postgres integration coverage for core flows
 
 ### Phase 3: Stabilization + Gap Closure
 **Goal**: The implementation is hardened against issues found during validation, and remaining rough edges are cleaned up.
@@ -67,5 +67,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. CLI MVP + Core Finalization | 0/3 | Not started | - |
-| 2. Core Test Harness + Validation | 0/2 | Not started | - |
+| 2. Core Test Harness + Validation | 2/2 | Complete   | 2026-04-05 |
 | 3. Stabilization + Gap Closure | 0/1 | Not started | - |

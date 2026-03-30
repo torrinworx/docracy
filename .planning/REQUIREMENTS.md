@@ -50,9 +50,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Testing
 
-- [ ] **TST-01**: Unit tests cover revision chaining and key invariants
-- [ ] **TST-02**: Integration tests cover migrations + Postgres persistence + init seeding
-- [ ] **TST-03**: Tests lock query/search semantics (filters, ordering, pagination)
+- [x] **TST-01**: Unit tests cover revision chaining and key invariants
+- [x] **TST-02**: Integration tests cover migrations + Postgres persistence + init seeding
+- [x] **TST-03**: Tests lock query/search semantics (filters, ordering, pagination)
 
 ## v2 Requirements
 
@@ -119,9 +119,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CLI-01 | Phase 1 | Complete |
 | CLI-02 | Phase 1 | Complete |
 | CLI-03 | Phase 1 | Complete |
-| TST-01 | Phase 2 | Pending |
-| TST-02 | Phase 2 | Pending |
-| TST-03 | Phase 2 | Pending |
+| TST-01 | Phase 2 | Complete |
+| TST-02 | Phase 2 | Complete |
+| TST-03 | Phase 2 | Complete |
 
 **Coverage:**
 - v1 requirements: 26 total
