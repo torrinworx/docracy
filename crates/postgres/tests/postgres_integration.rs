@@ -77,6 +77,18 @@ async fn isolated_repo(url: &str) -> (PgRepository, SchemaGuard) {
     (PgRepository::new(pool), _schema_guard)
 }
 
+async fn assert_index_exists(repo: &PgRepository, index_name: &str) {
+    let exists: Option<String> = sqlx::query_scalar(
+        "SELECT to_regclass($1)::text",
+    )
+    .bind(index_name)
+    .fetch_one(repo.pool())
+    .await
+    .unwrap();
+
+    assert_eq!(exists.as_deref(), Some(index_name));
+}
+
 #[tokio::test]
 async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     let Some(url) = database_url() else {
@@ -262,4 +274,76 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     assert_eq!(archived_out.rows[0].get("id").unwrap().as_str().unwrap(), created.document.id.to_string());
     assert_eq!(archived_out.rows[0].get("status").unwrap(), &json!(DocumentStatus::ARCHIVED));
     assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
+}
+
+#[tokio::test]
+async fn migration_enforces_same_document_revision_lineage_and_indexes() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let (repo, _schema_guard) = isolated_repo(&url).await;
+    repo.migrate().await.unwrap();
+
+    assert_index_exists(&repo, "documents_created_at_id_idx").await;
+    assert_index_exists(&repo, "documents_modified_at_id_idx").await;
+
+    let td = TempDir::new().unwrap();
+    let constitution_path = td.path().join("CONSTITUTION.md");
+    std::fs::write(&constitution_path, "v1").unwrap();
+    let governance = FsGovernanceSource::new(td.path());
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+
+    let mut repo = repo;
+    init_bundle(&mut repo, &governance, &clock, &ids).await.unwrap();
+
+    let first = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"doc": 1}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let second = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"doc": 2}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let bad_revision_id = docracy_core::RevisionId(Uuid::new_v4());
+    let bad_insert = sqlx::query(
+        "INSERT INTO document_revisions (id, document_id, version, parent_revision_id, created_at, content, extensions) VALUES ($1, $2, 2, $3, now(), $4, '{}'::jsonb)",
+    )
+    .bind(bad_revision_id.0)
+    .bind(second.document.id.0)
+    .bind(first.revision.id.0)
+    .bind(json!({"doc": 2, "bad": true}))
+    .execute(repo.pool())
+    .await;
+
+    assert!(bad_insert.is_err(), "cross-document parent revision insert should fail");
+
+    let current_revision_update = sqlx::query(
+        "UPDATE documents SET current_revision_id = $1 WHERE id = $2",
+    )
+    .bind(first.revision.id.0)
+    .bind(second.document.id.0)
+    .execute(repo.pool())
+    .await;
+
+    assert!(current_revision_update.is_err(), "cross-document current_revision_id update should fail");
 }
