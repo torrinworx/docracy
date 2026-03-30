@@ -12,7 +12,7 @@ Deliver a trustworthy, Postgres-backed, versioned document store with a finalize
 
 - [ ] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface.
 - [x] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI. (completed 2026-04-05)
-- [ ] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps.
+- [x] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps. (completed 2026-04-05)
 
 ## Phase Details
 
@@ -57,7 +57,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Validation-driven hardening and gap closure
+- [x] 03-01: Integrity hardening, migrate fix, and docs alignment
 
 ## Progress
 
@@ -68,4 +68,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. CLI MVP + Core Finalization | 0/3 | Not started | - |
 | 2. Core Test Harness + Validation | 2/2 | Complete   | 2026-04-05 |
-| 3. Stabilization + Gap Closure | 0/1 | Not started | - |
+| 3. Stabilization + Gap Closure | 1/1 | Complete   | 2026-04-05 |
