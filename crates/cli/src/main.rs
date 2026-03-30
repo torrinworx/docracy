@@ -130,7 +130,7 @@ async fn run() -> Result<()> {
     let mut repo = PgRepository::connect(&database_url)
         .await
         .context("failed to connect to postgres")?;
-    if !cli.no_migrate {
+    if should_run_startup_migrations(&cli.command, cli.no_migrate) {
         repo.migrate().await.context("failed to run migrations")?;
     }
 
@@ -201,6 +201,10 @@ async fn run() -> Result<()> {
 
     print_json(output, cli.pretty)?;
     Ok(())
+}
+
+fn should_run_startup_migrations(command: &Command, no_migrate: bool) -> bool {
+    matches!(command, Command::Migrate) || !no_migrate
 }
 
 fn read_json_input<T: DeserializeOwned>(input: Option<&str>) -> Result<T> {
@@ -298,5 +302,27 @@ fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
             message: err.to_string(),
             details: None,
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn migrate_subcommand_ignores_no_migrate_flag() {
+        assert!(should_run_startup_migrations(&Command::Migrate, true));
+    }
+
+    #[test]
+    fn ordinary_commands_still_honor_no_migrate_flag() {
+        assert!(!should_run_startup_migrations(
+            &Command::Query { input: None },
+            true,
+        ));
+        assert!(should_run_startup_migrations(
+            &Command::Query { input: None },
+            false,
+        ));
     }
 }
