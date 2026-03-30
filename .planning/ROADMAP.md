@@ -10,7 +10,7 @@ Deliver a trustworthy, Postgres-backed, versioned document store with a finalize
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface.
+- [x] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface. (completed 2026-04-05)
 - [x] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI. (completed 2026-04-05)
 - [x] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps. (completed 2026-04-05)
 
@@ -66,6 +66,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. CLI MVP + Core Finalization | 0/3 | Not started | - |
+| 1. CLI MVP + Core Finalization | 3/3 | Complete   | 2026-04-05 |
 | 2. Core Test Harness + Validation | 2/2 | Complete   | 2026-04-05 |
 | 3. Stabilization + Gap Closure | 1/1 | Complete   | 2026-04-05 |
