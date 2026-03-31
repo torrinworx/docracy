@@ -1,0 +1,6 @@
+{
+  "error": {
+    "kind": "internal_error",
+    "message": "missing --database-url and DATABASE_URL"
+  }
+}
