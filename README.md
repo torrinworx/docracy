@@ -1,25 +1,16 @@
 # Docracy: A bureaucratic system for agentic frameworks.
 
-> A Postgres-backed, versioned document store for agentic systems.
-
-Docracy keeps long-lived agent context in a database instead of a filesystem: typed documents, status, immutable revisions, and deterministic query/search. It boots agents with governance docs and active context, and it makes concurrent edits safer with `expected_revision` instead of silent overwrite.
-
-## What it does
-
-Ships `Init/Create/Read/Query/Update`, durable Postgres storage, arbitrary JSON `content`/`extensions`, governance seeding, keyword search, pagination, and structured CLI errors, backed by core and integration tests.
-
-## Opinionated by design
-
-- Database-first, not filesystem-first.
-- Current head plus immutable revision chain, not opaque rewrites.
-- Governance lives in the repo and is reflected in the DB.
-- Core semantics live in Rust; interfaces are transport layers.
-- Store `extensions` now; govern extension querying later.
-- Vector mirroring is future work, not v1.
+Docracy let's your agents create, use, and store agent context artifacts in a database instead of a filesystem. It boots agents with governance and custom contexts so that agent's can cleanly record their workflows and reference them in other contexts.
 
 ## Why this exists
 
-If you can expect llms to use file systems with tools from agentic frameworks, you can build tools for databases and have just the same results but with the benefits databases bring to large scale document stores. A layer is missing in agentic tools: database interaction as a document beuracracy store for long term memory.
+You can give an LLM tools to use a file system, why not give it tools for working with a databases. There is just as much SQL knowledge in these models as there is file systems. The only difference is that we haven't built a clean interface for these models to use a database as a tool yet. This repo solves that problem, or at least attempts to experiment with the concept.
+
+Adopting databases, we gain the efficiencies of large scale file stores that file systems can never achieve on their own.
+
+GSD proved to me that agentic frameworks need a bureacratic repository; stored knowledge, past findings, workflows, diagrams, procedures, etc. All searchable, all extensible. A database document beuracracy for long term memory.
+
+Agent's are ephemeral, context can be stored, managed, refined and re-used.
 
 File systems are great for working code, but suck for documentation. They don't have types, status, ownership, version, links, contextual update policies. Global search in file systems is akward, this is something that databases were built for.
 
