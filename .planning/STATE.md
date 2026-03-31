@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: MVP
 status: shipped
 stopped_at: Milestone v1.0 complete
-last_updated: "2026-04-05T23:35:54.193Z"
+last_updated: "2026-04-05T23:42:03.384Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -95,6 +95,7 @@ Recent decisions affecting current work:
 
 - Start the next milestone with `/gsd-new-milestone`.
 - Add specialty init context
+- Package installable CLI binaries
 
 ### Blockers/Concerns
 
