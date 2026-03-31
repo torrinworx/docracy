@@ -13,6 +13,7 @@ Deliver a trustworthy, Postgres-backed, versioned document store with a finalize
 - [x] **Phase 1: CLI MVP + Core Finalization** - Finalize core document/revision behavior, governance seeding, and the CLI surface. (completed 2026-04-05)
 - [x] **Phase 2: Core Test Harness + Validation** - Add direct-core tests that validate the implementation without going through the CLI. (completed 2026-04-05)
 - [x] **Phase 3: Stabilization + Gap Closure** - Use validation results to harden remaining issues and close gaps. (completed 2026-04-05)
+- [x] **Phase 4: Audit Verification Closure** - Restore missing phase verification artifacts and add the remaining CLI E2E stderr coverage. (completed 2026-04-05)
 
 ## Phase Details
 
@@ -59,6 +60,19 @@ Plans:
 Plans:
 - [x] 03-01: Integrity hardening, migrate fix, and docs alignment
 
+### Phase 4: Audit Verification Closure
+**Goal**: The milestone has explicit verification artifacts for every completed phase, and the CLI structured-error path has end-to-end coverage.
+**Depends on**: Phase 3
+**Requirements**: None new; this phase closes audit evidence gaps.
+**Success Criteria** (what must be TRUE):
+  1. Completed phases 2 and 3 each have a dedicated `VERIFICATION.md` artifact.
+  2. The CLI structured JSON error path has end-to-end coverage.
+  3. Milestone audit evidence is complete and no longer reports verification-only gaps.
+**Plans**: 1 plan
+
+Plans:
+- [x] 04-01: Verification evidence and CLI E2E coverage
+
 ## Progress
 
 **Execution Order:**
@@ -69,3 +83,4 @@ Phases execute in numeric order: 1 → 2 → 3
 | 1. CLI MVP + Core Finalization | 3/3 | Complete   | 2026-04-05 |
 | 2. Core Test Harness + Validation | 2/2 | Complete   | 2026-04-05 |
 | 3. Stabilization + Gap Closure | 1/1 | Complete   | 2026-04-05 |
+| 4. Audit Verification Closure | 1/1 | Complete    | 2026-04-05 |
