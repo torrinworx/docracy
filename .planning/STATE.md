@@ -1,30 +1,30 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: MVP
-status: shipped
-stopped_at: Milestone v1.0 complete
-last_updated: "2026-04-06T00:24:59.573Z"
+milestone: v1.1
+milestone_name: MCP Server Interface
+status: planned
+stopped_at: Phase 1 planned with research; execution not started
+last_updated: "2026-04-06T00:48:35+00:00"
 progress:
   total_phases: 4
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-05)
+See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Planning next milestone
+**Current focus:** Execute the v1.1 MCP Server Interface milestone without changing the storage-agnostic core layering.
 
 ## Current Position
 
-Phase: 4
-Plan: Complete
+Phase: 1 (planned)
+Plan: 01-01 and 01-02 created; execution not started
 
 ## Performance Metrics
 
@@ -46,7 +46,7 @@ Plan: Complete
 **Recent Trend:**
 
 - Last 5 plans: Phase 02 P02, Phase 03 P01, Phase 04 P01
-- Trend: Milestone complete; audit evidence closed
+- Trend: v1.0 closed cleanly; planning has shifted to the MCP interface milestone
 
 | Phase 01-cli-mvp-core-finalization P01 | 4 min | 2 tasks | 7 files |
 | Phase 01-cli-mvp-core-finalization P02 | 15 min | 2 tasks | 3 files |
@@ -84,27 +84,32 @@ Recent decisions affecting current work:
 - [Phase 04]: Use dedicated verification reports for completed phases instead of relying on SUMMARY-side self-checks.
 - [Phase 04]: Lock the CLI's structured error envelope with a real black-box stderr regression and golden fixture.
 - [Phase 04]: Mark the milestone audit as passed once the verification evidence is explicit and traceable.
+- [Milestone v1.1]: Add MCP as a separate Rust interface crate instead of expanding the CLI crate beyond its role.
+- [Milestone v1.1]: Reuse `docracy_core` service functions for MCP tools so the business contract stays single-sourced.
+- [Milestone v1.1]: Support stdio and Streamable HTTP from one handler stack, driven by OpenCode and OpenWebUI compatibility needs.
+- [Milestone v1.1]: Keep v1.1 focused on MCP tools and defer OAuth/prompts/resources until the base interface is proven.
 
-### Milestone Completion
+### Milestone Setup
 
-- v1.0 shipped with 26/26 v1 requirements satisfied.
-- Roadmap and requirements were archived to `.planning/milestones/`.
-- Verification evidence was completed for phases 2 and 3, and phase 4 closed the audit gap.
+- v1.0 remains shipped and archived with 26/26 requirements satisfied.
+- v1.1 is now defined in `.planning/REQUIREMENTS.md` and `.planning/ROADMAP.md`.
+- MCP research and client-compatibility notes are captured in `.planning/research/MCP_SERVER.md`.
+- Phase 1 planning artifacts are captured in `.planning/phases/01-mcp-crate-interface-boundary/`.
 
 ### Pending Todos
 
-- Start the next milestone with `/gsd-new-milestone`.
 - Add specialty init context
 - Package installable CLI binaries
 - Design vector mirror contract
 - Create GSD-style workflow doc
+- Craft launch marketing plan
 
 ### Blockers/Concerns
 
-- No current blockers.
+- `gsd-tools` phase lookup currently resolves `01` to the archived v1.0 phase directory, so future `/gsd-* phase 1` commands need a milestone-aware fix or manual path awareness.
 
 ## Session Continuity
 
 Last session: 2026-04-05T22:03:32.062Z
-Stopped at: Milestone v1.0 complete
-Resume file: None
+Stopped at: Phase 1 planned with research; execution not started
+Resume file: .planning/phases/01-mcp-crate-interface-boundary/01-01-PLAN.md
