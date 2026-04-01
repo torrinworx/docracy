@@ -1,31 +1,17 @@
 # Docracy: A bureaucratic system for agentic frameworks.
 
-Docracy let's your agents create, use, and store agent context artifacts in a database instead of a filesystem. It boots agents with governance and custom contexts so that agent's can cleanly record their workflows and reference them in other contexts.
+Docracy let's your agents create, use, and store agent context artifacts in a database instead of a filesystem. It boots your agents with project relevant context so that they can record their workflows and intuit them for the next task.
 
-## Why this exists
+You can give an LLM tools to use a file system, why not give it tools for working with a databases?
 
-You can give an LLM tools to use a file system, why not give it tools for working with a databases. There is just as much SQL knowledge in these models as there is file systems. The only difference is that we haven't built a clean interface for these models to use a database as a tool yet. This repo solves that problem, or at least attempts to experiment with the concept.
-
-Adopting databases, we gain the efficiencies of large scale file stores that file systems can never achieve on their own.
-
-GSD proved to me that agentic frameworks need a bureacratic repository; stored knowledge, past findings, workflows, diagrams, procedures, etc. All searchable, all extensible. A database document beuracracy for long term memory.
-
-Agent's are ephemeral, context can be stored, managed, refined and re-used.
-
-File systems are great for working code, but suck for documentation. They don't have types, status, ownership, version, links, contextual update policies. Global search in file systems is akward, this is something that databases were built for.
-
-Concurrent edits don't work very well in file systems, having multiple agents running can overwrite changes and mess with file versioning.
-
-Think of this system as a database for google doc style documents. Each individual document has history. Perhaps those documents could be tied to specific git commits of a repository through metadata, but that is up to the agentic framework to build out and design in accordance to their contextual documents.
-
-## Current state: shipped in v1
+## Current state:
 
 Docracy v1.0 is the Postgres-backed document store, revision model, test harness, and CLI. The current contract is:
 
 - Init/Create/Read/Query/Update are implemented.
 - Documents have `type`, `status`, timestamps, `content`, `extensions`, and a current revision head.
 - Updates create immutable revisions and require `expected_revision` so stale writes fail.
-- `Init` returns governance markdown files and active `context` documents.
+- `Init` returns governance markdown files and active `context` documents created by other agents.
 - Postgres migrations, full-text content search, filtering, ordering, pagination, and tests are in place.
 
 Future ideas and non-finalized notes are kept separate below so the current v1 behavior is easy to read.
