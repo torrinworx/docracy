@@ -4,7 +4,7 @@ milestone: v1.0
 milestone_name: MVP
 status: shipped
 stopped_at: Milestone v1.0 complete
-last_updated: "2026-04-06T00:06:59.114Z"
+last_updated: "2026-04-06T00:24:59.573Z"
 progress:
   total_phases: 4
   completed_phases: 4
@@ -97,6 +97,7 @@ Recent decisions affecting current work:
 - Add specialty init context
 - Package installable CLI binaries
 - Design vector mirror contract
+- Create GSD-style workflow doc
 
 ### Blockers/Concerns
 
