@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
-status: planned
+status: unknown
 stopped_at: Phase 1 planned with research; execution not started
-last_updated: "2026-04-06T00:48:35+00:00"
+last_updated: "2026-04-06T00:49:44+00:00"
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 8
-  completed_plans: 0
+  total_phases: 5
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Execute the v1.1 MCP Server Interface milestone without changing the storage-agnostic core layering.
+**Current focus:** Phase 1 — mcp-crate-interface-boundary
 
 ## Current Position
 
-Phase: 1 (planned)
-Plan: 01-01 and 01-02 created; execution not started
+Phase: 1 (mcp-crate-interface-boundary) — EXECUTING
+Plan: 1 of 2
 
 ## Performance Metrics
 
@@ -103,6 +103,7 @@ Recent decisions affecting current work:
 - Design vector mirror contract
 - Create GSD-style workflow doc
 - Craft launch marketing plan
+- Add MCP server to local opencode
 
 ### Blockers/Concerns
 
