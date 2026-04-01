@@ -13,6 +13,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - v1.0 is shipped and archived on 2026-04-05.
 - The CLI-backed MVP, core OCC, governance seeding, Postgres invariants, query/search, and validation harness are complete.
 - Phase 4 closed the remaining audit evidence gap with dedicated verification artifacts and CLI stderr coverage.
+- v1.1 is now planned around adding an MCP server interface crate alongside the existing CLI.
 
 ## Requirements
 
@@ -27,12 +28,16 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 
 ### Active
 
-- [ ] Next milestone requirements will be defined with `/gsd-new-milestone`
+- [ ] Add a Rust MCP server interface crate as a separate interface layer alongside the CLI.
+- [ ] Expose Init/Create/Read/Query/Update over MCP without moving business rules out of `docracy_core`.
+- [ ] Support stdio and Streamable HTTP transports so local OpenCode and native OpenWebUI flows are both viable.
+- [ ] Add MCP-focused configuration, integration tests, and setup/troubleshooting docs.
 
 ### Out of Scope
 
 - Vector DB parity/mirroring (future milestone) — not required for v1
-- Full hosted API/MCP server (future interface) — CLI/tests first
+- OAuth/DCR, RBAC, and multi-user hosted API concerns — separate future milestone after the first MCP interface ships
+- MCP prompts/resources/sampling — tool surface first
 
 ## Context
 
@@ -40,7 +45,8 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - The system is intentionally a "document store" (arbitrary content + agent-defined extensions), not a normalized business database.
 - Governance seed documents teach agents how to use the system and how to evolve the context documents over time.
 - v1.0 shipped with 26/26 v1 requirements satisfied and 16 executed tasks across 7 plans.
-- Planning now shifts to the next milestone scope.
+- The next milestone is scoped to a thin MCP wrapper over the existing core/Postgres architecture, not a rewrite of the core delivery model.
+- OpenCode local subprocess support and OpenWebUI Streamable HTTP support are the concrete client targets driving the interface design.
 
 ## Constraints
 
@@ -63,6 +69,10 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 | Init may repair constitution only through system-only paths | Preserves governance immutability | ✓ Good |
 | Repository invariants belong in deferred DB checks when needed | Keeps transactional flows safe | ✓ Good |
 | Milestone verification artifacts are first-class | Keeps audit evidence explicit and traceable | ✓ Good |
+| MCP will be added as a separate interface crate | Preserves the existing storage-agnostic core + adapter layering | ✓ Planned |
+| MCP handlers will reuse the current core service functions | Avoids business-rule drift between CLI and MCP | ✓ Planned |
+| Target MCP transports are stdio and Streamable HTTP | Matches the current MCP spec and target clients (OpenCode/OpenWebUI) | ✓ Planned |
+| v1.1 focuses on tools, not prompts/resources/OAuth | Keeps scope tight around exposing the shipped contract first | ✓ Planned |
 
 ## Evolution
 
@@ -82,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after v1.0 milestone*
+*Last updated: 2026-04-06 after defining v1.1 MCP Server Interface*
