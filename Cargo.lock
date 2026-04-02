@@ -405,6 +405,8 @@ dependencies = [
  "anyhow",
  "docracy-core",
  "docracy-postgres",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

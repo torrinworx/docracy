@@ -7,8 +7,10 @@
 //! rules to `docracy-core`.
 
 pub mod config;
+pub mod error;
 pub mod operations;
 pub mod runtime;
 
 pub use config::{McpStartupConfig, McpTransport};
+pub use error::{McpError, McpErrorKind};
 pub use runtime::{bootstrap, run_migrations, McpRuntime};
