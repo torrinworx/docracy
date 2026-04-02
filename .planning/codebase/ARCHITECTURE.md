@@ -9,7 +9,7 @@
 **Key Characteristics:**
 - Domain + use-cases live in a storage-agnostic core crate (`crates/core/`).
 - Storage is an interface (`Repository`) defined in core and implemented by adapters (e.g. Postgres in `crates/postgres/`).
-- Drivers/adapters (CLI) depend on core + a concrete repository adapter (`crates/cli/`).
+- Drivers/adapters (CLI, MCP) depend on core + a concrete repository adapter (`crates/cli/`, `crates/mcp/`).
 
 ## Layers
 
@@ -73,6 +73,18 @@
   - Parse CLI args (`clap`) and load JSON inputs.
   - Establish DB connection and run migrations (unless `--no-migrate`).
   - Call core use-cases and serialize results as JSON.
+
+**MCP interface crate (`docracy-mcp`):**
+- Location: `crates/mcp/`
+- Responsibilities:
+  - Own MCP-facing configuration and runtime bootstrap (database URL, governance path, migration behavior, transport selection).
+  - Initialize shared dependencies (`PgRepository`, `FsGovernanceSource`, `SystemClock`, `UuidV4Generator`) in one place so multiple transports can reuse the same startup path.
+  - Map protocol-facing request/response shapes and errors without changing domain behavior.
+- Explicit boundary:
+  - **Business rules stay in `docracy_core`** (the canonical use-cases in `crates/core/src/service.rs`: `create_document`, `read_documents`, `query_documents`, `update_document`, `init_bundle`).
+  - Put plainly: business rules stay in `docracy_core`.
+  - `crates/mcp` is a thin interface/driver layer and must delegate to those core use-cases rather than reimplementing document/governance rules.
+  - Transport-specific serving code (stdio / Streamable HTTP) should wrap the shared bootstrap/handler logic instead of duplicating it.
 
 ## Data Flow
 
