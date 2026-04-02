@@ -55,9 +55,9 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IFC-01 | Phase 1 | Planned |
-| IFC-02 | Phase 1 | Planned |
-| IFC-03 | Phase 1 | Planned |
+| IFC-01 | Phase 1 | Complete |
+| IFC-02 | Phase 1 | Complete |
+| IFC-03 | Phase 1 | Complete |
 | TOOL-01 | Phase 2 | Planned |
 | TOOL-02 | Phase 2 | Planned |
 | TOOL-03 | Phase 2 | Planned |
@@ -66,13 +66,13 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | TRN-02 | Phase 3 | Planned |
 | TRN-03 | Phase 3 | Planned |
 | TRN-04 | Phase 3 | Planned |
-| CFG-01 | Phase 1 | Planned |
+| CFG-01 | Phase 1 | Complete |
 | CFG-02 | Phase 3 | Planned |
 | CFG-03 | Phase 2 | Planned |
 | TST-01 | Phase 2 | Planned |
 | TST-02 | Phase 4 | Planned |
 | DOC-01 | Phase 4 | Planned |
-| DOC-02 | Phase 1 | Planned |
+| DOC-02 | Phase 1 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 18 total
