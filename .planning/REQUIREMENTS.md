@@ -9,8 +9,8 @@
 ### Interface Layer
 
 - [x] **IFC-01**: Workspace includes a separate Rust `crates/mcp` interface crate alongside `crates/cli`, preserving the storage-agnostic core + Postgres adapter layering.
-- [ ] **IFC-02**: MCP handlers call existing `docracy_core` use-cases (`init_bundle`, `create_document`, `read_documents`, `query_documents`, `update_document`) instead of duplicating business rules.
-- [ ] **IFC-03**: Request parsing, response shaping, and error mapping for MCP live in the interface layer only; domain invariants remain enforced by the core and repository adapter.
+- [x] **IFC-02**: MCP handlers call existing `docracy_core` use-cases (`init_bundle`, `create_document`, `read_documents`, `query_documents`, `update_document`) instead of duplicating business rules.
+- [x] **IFC-03**: Request parsing, response shaping, and error mapping for MCP live in the interface layer only; domain invariants remain enforced by the core and repository adapter.
 
 ### MCP Tool Contract
 

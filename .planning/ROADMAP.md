@@ -8,7 +8,7 @@ Deliver a dedicated Rust MCP server interface crate that wraps the existing stor
 
 ## Phases
 
-- [ ] **Phase 1: MCP Crate + Interface Boundary** - Create the new interface crate, runtime/config bootstrap, and core-delegating handler boundary.
+- [x] **Phase 1: MCP Crate + Interface Boundary** - Create the new interface crate, runtime/config bootstrap, and core-delegating handler boundary.
 - [ ] **Phase 2: Tool Surface + Stdio Delivery** - Expose Init/Create/Read/Query/Update as MCP tools and make the server usable from local stdio clients such as OpenCode.
 - [ ] **Phase 3: Streamable HTTP + Client Compatibility** - Add the HTTP transport, safe runtime defaults, and client compatibility for OpenWebUI and remote MCP usage.
 - [ ] **Phase 4: Verification + Documentation Hardening** - Lock the contract with integration coverage, examples, and contributor docs.
@@ -27,7 +27,7 @@ Deliver a dedicated Rust MCP server interface crate that wraps the existing stor
 
 Plans:
 - [x] 01-01: Workspace crate bootstrap + runtime/config model
-- [ ] 01-02: Core delegation layer + MCP-facing error/response mapping
+- [x] 01-02: Core delegation layer + MCP-facing error/response mapping
 
 ### Phase 2: Tool Surface + Stdio Delivery
 **Goal**: Local clients can use Docracy through MCP over stdio, with the same operational contract as the existing CLI surface.
@@ -78,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. MCP Crate + Interface Boundary | 1/2 | In Progress | - |
+| 1. MCP Crate + Interface Boundary | 2/2 | Complete | 2026-04-06 |
 | 2. Tool Surface + Stdio Delivery | 0/2 | Planned | - |
 | 3. Streamable HTTP + Client Compatibility | 0/2 | Planned | - |
 | 4. Verification + Documentation Hardening | 0/2 | Planned | - |
