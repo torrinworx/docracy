@@ -1,3 +1,3 @@
 [workspace]
-members = ["crates/core", "crates/postgres", "crates/cli"]
+members = ["crates/core", "crates/postgres", "crates/cli", "crates/mcp"]
 resolver = "2"

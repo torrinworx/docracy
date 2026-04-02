@@ -1,0 +1,1 @@
+//! MCP-owned startup configuration.
