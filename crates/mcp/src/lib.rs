@@ -7,4 +7,8 @@
 //! rules to `docracy-core`.
 
 pub mod config;
+pub mod operations;
 pub mod runtime;
+
+pub use config::{McpStartupConfig, McpTransport};
+pub use runtime::{bootstrap, run_migrations, McpRuntime};

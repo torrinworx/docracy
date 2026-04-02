@@ -405,6 +405,7 @@ dependencies = [
  "anyhow",
  "docracy-core",
  "docracy-postgres",
+ "tokio",
 ]
 
 [[package]]
