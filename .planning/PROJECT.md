@@ -14,6 +14,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - The CLI-backed MVP, core OCC, governance seeding, Postgres invariants, query/search, and validation harness are complete.
 - Phase 4 closed the remaining audit evidence gap with dedicated verification artifacts and CLI stderr coverage.
 - v1.1 is now planned around adding an MCP server interface crate alongside the existing CLI.
+- v1.1 Phase 1 is complete: `crates/mcp` exists, owns runtime/config bootstrap, and delegates Init/Create/Read/Query/Update operations to `docracy_core` with interface-local error mapping + tests.
 
 ## Requirements
 
@@ -28,8 +29,8 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 
 ### Active
 
-- [ ] Add a Rust MCP server interface crate as a separate interface layer alongside the CLI.
-- [ ] Expose Init/Create/Read/Query/Update over MCP without moving business rules out of `docracy_core`.
+- [x] Add a Rust MCP server interface crate as a separate interface layer alongside the CLI.
+- [ ] Expose Init/Create/Read/Query/Update over MCP (tool surface + transports) without moving business rules out of `docracy_core`.
 - [ ] Support stdio and Streamable HTTP transports so local OpenCode and native OpenWebUI flows are both viable.
 - [ ] Add MCP-focused configuration, integration tests, and setup/troubleshooting docs.
 
@@ -69,8 +70,8 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 | Init may repair constitution only through system-only paths | Preserves governance immutability | ✓ Good |
 | Repository invariants belong in deferred DB checks when needed | Keeps transactional flows safe | ✓ Good |
 | Milestone verification artifacts are first-class | Keeps audit evidence explicit and traceable | ✓ Good |
-| MCP will be added as a separate interface crate | Preserves the existing storage-agnostic core + adapter layering | ✓ Planned |
-| MCP handlers will reuse the current core service functions | Avoids business-rule drift between CLI and MCP | ✓ Planned |
+| MCP will be added as a separate interface crate | Preserves the existing storage-agnostic core + adapter layering | ✓ Good |
+| MCP handlers will reuse the current core service functions | Avoids business-rule drift between CLI and MCP | ✓ Good |
 | Target MCP transports are stdio and Streamable HTTP | Matches the current MCP spec and target clients (OpenCode/OpenWebUI) | ✓ Planned |
 | v1.1 focuses on tools, not prompts/resources/OAuth | Keeps scope tight around exposing the shipped contract first | ✓ Planned |
 
@@ -92,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after defining v1.1 MCP Server Interface*
+*Last updated: 2026-04-06 after v1.1 phase 1 completion*
