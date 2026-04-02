@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Phase 1 planned with research; execution not started
-last_updated: "2026-04-06T00:49:44+00:00"
+stopped_at: Completed 01-mcp-crate-interface-boundary/01-01-PLAN.md
+last_updated: "2026-04-06T00:54:28.289Z"
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 Phase: 1 (mcp-crate-interface-boundary) — EXECUTING
-Plan: 1 of 2
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Plan: 1 of 2
 | Phase 02-core-test-harness-validation P02 | 5 min | 2 tasks | 1 file |
 | Phase 03-stabilization-gap-closure P01 | 10 min | 3 tasks | 4 files |
 | Phase 04 P01 | 12 min | 3 tasks | 6 files |
+| Phase 01-mcp-crate-interface-boundary P01 | 1 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,8 @@ Recent decisions affecting current work:
 - [Milestone v1.1]: Reuse `docracy_core` service functions for MCP tools so the business contract stays single-sourced.
 - [Milestone v1.1]: Support stdio and Streamable HTTP from one handler stack, driven by OpenCode and OpenWebUI compatibility needs.
 - [Milestone v1.1]: Keep v1.1 focused on MCP tools and defer OAuth/prompts/resources until the base interface is proven.
+- [Phase 01-mcp-crate-interface-boundary]: Keep crates/mcp library-first and transport-agnostic; transports wrap shared bootstrap
+- [Phase 01-mcp-crate-interface-boundary]: Own runtime/config in docracy-mcp; delegate business rules to docracy-core use-cases
 
 ### Milestone Setup
 
@@ -111,6 +114,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-05T22:03:32.062Z
-Stopped at: Phase 1 planned with research; execution not started
-Resume file: .planning/phases/01-mcp-crate-interface-boundary/01-01-PLAN.md
+Last session: 2026-04-06T00:54:18.577Z
+Stopped at: Completed 01-mcp-crate-interface-boundary/01-01-PLAN.md
+Resume file: None

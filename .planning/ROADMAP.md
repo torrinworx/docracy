@@ -26,7 +26,7 @@ Deliver a dedicated Rust MCP server interface crate that wraps the existing stor
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Workspace crate bootstrap + runtime/config model
+- [x] 01-01: Workspace crate bootstrap + runtime/config model
 - [ ] 01-02: Core delegation layer + MCP-facing error/response mapping
 
 ### Phase 2: Tool Surface + Stdio Delivery
@@ -78,7 +78,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. MCP Crate + Interface Boundary | 0/2 | Planned | - |
+| 1. MCP Crate + Interface Boundary | 1/2 | In Progress | - |
 | 2. Tool Surface + Stdio Delivery | 0/2 | Planned | - |
 | 3. Streamable HTTP + Client Compatibility | 0/2 | Planned | - |
 | 4. Verification + Documentation Hardening | 0/2 | Planned | - |

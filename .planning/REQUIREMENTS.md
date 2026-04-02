@@ -8,7 +8,7 @@
 
 ### Interface Layer
 
-- [ ] **IFC-01**: Workspace includes a separate Rust `crates/mcp` interface crate alongside `crates/cli`, preserving the storage-agnostic core + Postgres adapter layering.
+- [x] **IFC-01**: Workspace includes a separate Rust `crates/mcp` interface crate alongside `crates/cli`, preserving the storage-agnostic core + Postgres adapter layering.
 - [ ] **IFC-02**: MCP handlers call existing `docracy_core` use-cases (`init_bundle`, `create_document`, `read_documents`, `query_documents`, `update_document`) instead of duplicating business rules.
 - [ ] **IFC-03**: Request parsing, response shaping, and error mapping for MCP live in the interface layer only; domain invariants remain enforced by the core and repository adapter.
 
@@ -28,7 +28,7 @@
 
 ### Configuration & Operations
 
-- [ ] **CFG-01**: Server configuration covers Postgres connection, governance path, migration behavior, and transport selection without hardcoded environment assumptions.
+- [x] **CFG-01**: Server configuration covers Postgres connection, governance path, migration behavior, and transport selection without hardcoded environment assumptions.
 - [ ] **CFG-02**: HTTP mode binds `127.0.0.1` by default and documents origin/auth expectations for non-local deployments.
 - [ ] **CFG-03**: Transport-safe logging/output rules are preserved: stdio stdout is reserved for MCP messages, and logs go to stderr/tracing sinks.
 
@@ -37,7 +37,7 @@
 - [ ] **TST-01**: Automated tests cover MCP tool schemas, handler behavior, and error mapping without relying solely on manual client testing.
 - [ ] **TST-02**: Integration tests exercise real Postgres-backed MCP flows over at least one transport.
 - [ ] **DOC-01**: Documentation shows how to run the MCP server locally, configure OpenCode/OpenWebUI, and troubleshoot common setup issues.
-- [ ] **DOC-02**: Documentation explains the interface boundary so future API/MCP work does not pull business rules out of the core.
+- [x] **DOC-02**: Documentation explains the interface boundary so future API/MCP work does not pull business rules out of the core.
 
 ## Deferred / Out of Scope for v1.1
 
