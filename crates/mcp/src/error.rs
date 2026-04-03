@@ -93,4 +93,31 @@ impl McpError {
     pub fn from_setup(err: anyhow::Error) -> Self {
         McpError::new(McpErrorKind::SetupError, err.to_string())
     }
+
+    /// Convert this error into rmcp's `ErrorData` with a stable machine-readable envelope.
+    ///
+    /// `ErrorData.data` is always JSON:
+    /// `{ "kind": <snake_case McpErrorKind>, "details": <details|null> }`
+    pub fn to_error_data(&self) -> rmcp::model::ErrorData {
+        let kind = serde_json::to_value(self.kind)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_else(|| "internal_error".to_string());
+
+        let data = json!({
+            "kind": kind,
+            "details": self.details.clone().unwrap_or(Value::Null),
+        });
+
+        use McpErrorKind::*;
+        match self.kind {
+            ValidationError => {
+                rmcp::model::ErrorData::invalid_params(self.message.clone(), Some(data))
+            }
+            DocumentNotFound | RevisionNotFound | MissingCurrentRevision => {
+                rmcp::model::ErrorData::invalid_request(self.message.clone(), Some(data))
+            }
+            _ => rmcp::model::ErrorData::internal_error(self.message.clone(), Some(data)),
+        }
+    }
 }

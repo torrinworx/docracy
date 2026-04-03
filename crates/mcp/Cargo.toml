@@ -7,8 +7,11 @@ edition = "2021"
 anyhow = "1.0"
 docracy-core = { path = "../core" }
 docracy-postgres = { path = "../postgres" }
+rmcp = { version = "1.3.0", features = ["server", "client", "local", "transport-io", "transport-async-rw", "schemars"] }
+schemars = { version = "1.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tokio = { version = "1", features = ["sync"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

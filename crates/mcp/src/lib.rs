@@ -10,7 +10,9 @@ pub mod config;
 pub mod error;
 pub mod operations;
 pub mod runtime;
+pub mod tools;
 
 pub use config::{McpStartupConfig, McpTransport};
 pub use error::{McpError, McpErrorKind};
 pub use runtime::{bootstrap, run_migrations, McpRuntime};
+pub use tools::DocracyMcpServer;
