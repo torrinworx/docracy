@@ -40,7 +40,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: MCP tool registration, schemas, and handler coverage
+- [x] 02-01: MCP tool registration, schemas, and handler coverage
 - [ ] 02-02: Stdio transport, local smoke tests, and OpenCode local configuration
 
 ### Phase 3: Streamable HTTP + Client Compatibility
