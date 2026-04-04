@@ -32,7 +32,7 @@ Output:
 Input:
 
 ```json
-{ "type": "...", "content": {}, "extensions": {} }
+{ "type": "...", "content": { "...": "..." }, "extensions": {} }
 ```
 
 Output:
@@ -80,7 +80,7 @@ Input:
 {
   "id": "...",
   "expected_revision": "...",
-  "content": {},
+  "content": { "...": "..." },
   "extensions": {},
   "status": "..."
 }

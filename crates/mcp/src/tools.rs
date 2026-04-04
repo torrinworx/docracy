@@ -90,7 +90,7 @@ impl DocracyMcpServer {
 
         let input = docracy_core::NewDocument {
             doc_type,
-            content: args.content,
+            content: object_to_value(args.content),
             extensions: args.extensions.into_iter().collect(),
         };
         input
@@ -172,7 +172,7 @@ impl rmcp::ServerHandler for DocracyMcpServer {}
 pub struct CreateArgs {
     #[serde(rename = "type")]
     pub doc_type: String,
-    pub content: Value,
+    pub content: BTreeMap<String, Value>,
     #[serde(default)]
     pub extensions: BTreeMap<String, Value>,
 }
@@ -246,7 +246,7 @@ pub struct UpdateArgs {
     pub id: String,
     #[serde(alias = "expected_head")]
     pub expected_revision: String,
-    pub content: Option<Value>,
+    pub content: Option<BTreeMap<String, Value>>,
     pub extensions: Option<BTreeMap<String, Value>>,
     pub status: Option<String>,
 }
@@ -259,11 +259,15 @@ impl UpdateArgs {
         Ok(docracy_core::service::UpdateDocumentInput {
             id,
             expected_head,
-            content: self.content,
+            content: self.content.map(object_to_value),
             extensions: self.extensions.map(|m| m.into_iter().collect()),
             status: self.status,
         })
     }
+}
+
+fn object_to_value(map: BTreeMap<String, Value>) -> Value {
+    Value::Object(map.into_iter().collect())
 }
 
 fn parse_document_id(input: &str) -> Result<docracy_core::ids::DocumentId, rmcp::model::ErrorData> {
