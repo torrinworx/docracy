@@ -41,7 +41,7 @@ Plans:
 
 Plans:
 - [x] 02-01: MCP tool registration, schemas, and handler coverage
-- [ ] 02-02: Stdio transport, local smoke tests, and OpenCode local configuration
+- [x] 02-02: Stdio transport, local smoke tests, and OpenCode local configuration
 
 ### Phase 3: Streamable HTTP + Client Compatibility
 **Goal**: Docracy can also run as a Streamable HTTP MCP server for browser-adjacent and remote clients without creating a second implementation path.
