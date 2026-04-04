@@ -108,6 +108,7 @@ Recent decisions affecting current work:
 - Create GSD-style workflow doc
 - Craft launch marketing plan
 - Add MCP server to local opencode
+- Make governance path repo-defined in opencode config
 
 ### Blockers/Concerns
 
