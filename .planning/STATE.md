@@ -109,6 +109,7 @@ Recent decisions affecting current work:
 - Craft launch marketing plan
 - Add MCP server to local opencode
 - Make governance path repo-defined in opencode config
+- Scope Docracy by workspace
 
 ### Blockers/Concerns
 

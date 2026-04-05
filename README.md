@@ -336,3 +336,44 @@ Suggested development phases to follow. This is effectively the order that produ
 7. `Update` function, create a revision abstraction tool that updates a given document while storing previous revision history.
 8. Add the test harness.
 9. Add CLI.
+
+
+
+# How to use:
+
+Prerequisite: install and configure OpenCode.
+
+for OpenCode:
+1. setup Docracy mcp config:
+```json
+"mcp": {
+  "docracy": {
+    "type": "local",
+    "command": [
+      "cargo",
+      "run",
+      "-p",
+      "docracy-mcp",
+      "--bin",
+      "docracy-mcp",
+      "--",
+      "--governance-dir",
+      "./governance"
+    ],
+    "environment": {
+      "DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy"
+    }
+  }
+}
+```
+2. Run the docker compose file:
+```bash
+cd ./docracy
+docker compose up -d
+```
+3. Add an AGENTS.md file to your repo, and place something like this in it:
+```md
+<!-- DOCRACY -->
+Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
+```
+4. Start chatting!! Now the docracy constitution and your agent generated context documents will be auto loaded into all your future conversations with a given repo!
