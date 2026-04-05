@@ -89,8 +89,18 @@ async fn assert_index_exists(repo: &PgRepository, index_name: &str) {
     assert_eq!(exists.as_deref(), Some(index_name));
 }
 
+async fn assert_index_absent(repo: &PgRepository, index_name: &str) {
+    let exists: Option<String> = sqlx::query_scalar("SELECT to_regclass($1)::text")
+        .bind(index_name)
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
+
+    assert_eq!(exists, None);
+}
+
 #[tokio::test]
-async fn init_bootstraps_and_repairs_constitution_in_postgres() {
+async fn init_bootstraps_and_repairs_governance_in_postgres() {
     let Some(url) = database_url() else {
         // No configured DB for CI/local runs.
         return;
@@ -100,8 +110,8 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     repo.migrate().await.unwrap();
 
     let td = TempDir::new().unwrap();
-    let constitution_path = td.path().join("CONSTITUTION.md");
-    std::fs::write(&constitution_path, "v1").unwrap();
+    let governance_path = td.path().join("CONSTITUTION.md");
+    std::fs::write(&governance_path, "v1").unwrap();
     let governance = FsGovernanceSource::new(td.path());
 
     let clock = SystemClock;
@@ -113,7 +123,7 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
         .unwrap();
 
     let doc = repo
-        .find_latest_document_by_type(DocumentType::CONSTITUTION)
+        .find_latest_document_by_type(DocumentType::GOVERNANCE)
         .await
         .unwrap()
         .unwrap();
@@ -126,13 +136,13 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
         .unwrap();
     assert_eq!(rev1.version, 1);
 
-    std::fs::write(&constitution_path, "v2").unwrap();
+    std::fs::write(&governance_path, "v2").unwrap();
     init_bundle(&mut repo, &governance, &clock, &ids)
         .await
         .unwrap();
 
     let doc = repo
-        .find_latest_document_by_type(DocumentType::CONSTITUTION)
+        .find_latest_document_by_type(DocumentType::GOVERNANCE)
         .await
         .unwrap()
         .unwrap();
@@ -146,14 +156,14 @@ async fn init_bootstraps_and_repairs_constitution_in_postgres() {
     let parent = repo.get_revision(rev1.id).await.unwrap().unwrap();
     assert!(parent.superseded_at.is_some());
 
-    // Uniqueness: inserting another constitution should conflict.
+    // Uniqueness: inserting another governance document should conflict.
     let doc_id = docracy_core::DocumentId(Uuid::new_v4());
     let rev_id = docracy_core::RevisionId(Uuid::new_v4());
     let res = repo
         .create_document_with_revision(
             docracy_core::Document {
                 id: doc_id,
-                doc_type: DocumentType::new(DocumentType::CONSTITUTION).unwrap(),
+                doc_type: DocumentType::new(DocumentType::GOVERNANCE).unwrap(),
                 status: DocumentStatus::active(),
                 created_at: chrono::Utc::now(),
                 modified_at: chrono::Utc::now(),
@@ -287,10 +297,12 @@ async fn migration_enforces_same_document_revision_lineage_and_indexes() {
 
     assert_index_exists(&repo, "documents_created_at_id_idx").await;
     assert_index_exists(&repo, "documents_modified_at_id_idx").await;
+    assert_index_exists(&repo, "documents_single_governance_uq").await;
+    assert_index_absent(&repo, "documents_single_constitution_uq").await;
 
     let td = TempDir::new().unwrap();
-    let constitution_path = td.path().join("CONSTITUTION.md");
-    std::fs::write(&constitution_path, "v1").unwrap();
+    let governance_path = td.path().join("CONSTITUTION.md");
+    std::fs::write(&governance_path, "v1").unwrap();
     let governance = FsGovernanceSource::new(td.path());
     let clock = SystemClock;
     let ids = UuidV4Generator;
