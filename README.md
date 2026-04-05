@@ -1,8 +1,8 @@
 # Docracy: A bureaucratic system for agentic frameworks.
 
-Docracy let's your agents create, use, and store agent context artifacts in a database instead of a filesystem. It boots your agents with project relevant context so that they can record their workflows and intuit them for the next task.
+Docracy lets your agents create, use, and store agent context artifacts in a database instead of a filesystem. It boots your agents with project-relevant context so that they can record their workflows and carry that context into the next task.
 
-You can give an LLM tools to use a file system, why not give it tools for working with a databases?
+You can give an LLM tools to use a filesystem, so why not give it tools for working with databases?
 
 ## Current state:
 
@@ -20,52 +20,52 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 
 ### Shipped in v1
 
-- **Init**, to agents: 'load this to learn how the system works.' In v1 this returns the local `./governance` markdown files, as well as any active `type = context` documents found in the database that aren't archived or deleted. It also ensures the stored constitution matches the repo copy.
-- **Create**, allow agent to create a refined document, pass it in, and store it in the postgresql document db.
+- **Init**, to agents: 'load this to learn how the system works.' In v1 this returns the local `./governance` markdown files, as well as any active `type = context` documents found in the database that are not archived or deleted. It also ensures the stored constitution matches the repo copy.
+- **Create**, allows agents to create a refined document, pass it in, and store it in the PostgreSQL document DB.
 - **Read**, this fetches the full contents of current documents by id.
-- **Query**, sql style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT`, tool for current documents. Keyword search runs over document content. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
-- **Update**, allow agent's to update and append findings to existing documents, including re-writing them. This stores revision history and requires `expected_revision` so stale writes fail instead of overwriting.
+- **Query**, an SQL-style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT` tool for current documents. Keyword search runs over document content. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
+- **Update**, allows agents to update and append findings to existing documents, including rewriting them. This stores revision history and requires `expected_revision` so stale writes fail instead of overwriting.
 - **CLI contract**, commands return JSON on stdout, commands that take payloads read JSON on stdin or from an input file, failures emit structured JSON on stderr and exit non-zero.
 
 ### Future ideas
 
-- **Retrieval helper / smart context loading**, somehow send in the entire chat history into this as a parameter. Vector search is run, top results, the entire files of some filtered set of results are appended to the context. List id's and short blurbs about other results not included. Ensure high relevancy to the user message/context history.
-- **Schema**, list or inform the agent of a specific schema and it's structure to make querying it easier to understand?
-- **Delete**, allow agent's to delete documents if they are no longer relevant. In reality it would probably just be archiving as a first-class tool, while searches can choose whether archived/deleted docs are included.
+- **Retrieval helper / smart context loading**, somehow send the entire chat history into this as a parameter. Vector search runs, top results, and the full files of some filtered set of results are appended to the context. List IDs and short blurbs about other results not included. Ensure high relevance to the user message/context history.
+- **Schema**, list or inform the agent of a specific schema and its structure to make querying it easier to understand?
+- **Delete**, allow agents to delete documents if they are no longer relevant. In reality it would probably just be archiving as a first-class tool, while searches can choose whether archived/deleted docs are included.
 
 ## Major systems
 
 ### Shipped in v1
 
-- **Document Database.** The primary source of beuracracy.
+- **Document Database.** The primary source of bureaucracy.
 - **Postgres backend.** The first durable storage layer for the document database.
-- **Tests**, simple self contained testing harness and unit/integration tests.
-- **Governance seed contexts.** The system is provided with 'seed contexts' governance documents that allow for it to function. This includes 1. general context about how to use the system and a solid non writable constitution document, 2. project-specific context documents that are editable by the agents with guidance from the constitution. These documents are loaded in and are like the "school" phase, they get any agent up to speed on the general vibe of the project without wasting tokens.
+- **Tests**, a simple self-contained testing harness and unit/integration tests.
+- **Governance seed contexts.** The system is provided with 'seed contexts' governance documents that allow it to function. This includes 1. general context about how to use the system and a solid non-writable constitution document, 2. project-specific context documents that are editable by agents with guidance from the constitution. These documents are loaded in and are like the "school" phase; they get any agent up to speed on the general vibe of the project without wasting tokens.
 
 `CONSTITUTION.md` is immutable and part of the codebase. The DB copy is expected to reflect it.
 
 ### Future ideas
 
-- **Vector Database.** A mirror of the Document Database. Whenever a document get's updated, including archive status, and all metadata about the document. New documents created in document database are updated here too. Perfect parity is necessary. I think it's best if this stays a future implementation; the core feature for now is the document database.
+- **Vector Database.** A mirror of the Document Database. Whenever a document gets updated, including archive status and all metadata about the document, the mirror is updated too. Perfect parity is necessary. I think it's best if this stays a future implementation; the core feature for now is the document database.
 
 ## Document types
 
 ### Shipped in v1
 
-- **constitution** hard coded in this repo, stored in the db on init, loaded on every call of `Init`.
-- **context** general knowledge and need to knows for the project for any agent, generalized information, can be stored in any number of documents but are always there while active. Crud operations work for these, and they have specific importance because they are loaded in on every context of every future agent.
-- **general** general knowledge store, outlined to create a store whenever there is a learning, decision, or information created by the user or an agent, this is the "agent beuracracy" side of things. The agent can freely control how general documents are stored and created, how they reference each other, what type of information and quality of information they store. It's ideal that they outline the structure of their documents in the seed context documents.
+- **constitution** hard-coded in this repo, stored in the DB on init, loaded on every call of `Init`.
+- **context** general knowledge and things an agent needs to know for the project; generalized information can be stored in any number of documents, but these are always present while active. CRUD operations work for these, and they are important because they are loaded into every context for every future agent.
+- **general** general knowledge store, intended to create a store whenever there is a learning, decision, or piece of information created by the user or an agent. This is the "agent bureaucracy" side of things. The agent can freely control how general documents are stored and created, how they reference each other, and what type and quality of information they store. It is ideal that they outline the structure of their documents in the seed context documents.
 
 ### Future ideas
 
-- **chats** Raw chat stores, by default archived on, good to search through for specific debugging or reviewing past revisions and decisions.
+- **chats** Raw chat stores, archived by default, good to search through for specific debugging or reviewing past revisions and decisions.
 - Additional specialized types like `webpage`, `file`, `decision`, `task`, etc.
 
 # Document extensibility
 
 ### Shipped in v1
 
-The contents of a document can be dictated by the agents, and the `context` documents the agents have control over can define conventions around that. For example, when an update happens to a document, agents may want to reference commit hashes and specific files:
+The contents of a document can be dictated by agents, and the `context` documents they control can define conventions around that. For example, when an update happens to a document, agents may want to reference commit hashes and specific files:
 
 ```json
 extensions: {
@@ -85,11 +85,11 @@ In v1 these are stored and returned, but extension-field search/filtering is def
 
 ### Future ideas
 
-The goal with these is to extend the document system, such that the llms can attach repository/task metadata that later phases may choose to index and query.
+The goal with these is to extend the document system so that LLMs can attach repository/task metadata that later phases may choose to index and query.
 
 They can then outline how to define these in the document extensions on the Create request and how to surface them in Read responses.
 
-The agents, whenever they come accross a need for it, would create new extension fields for each document stored along side it in the database. Agents would then update the `context` documents to dictate how the new fields would work and how to use them to other agents, all of this would follow the same framework and logical requirenments as the constitution would state for updating the `context` documents.
+Whenever agents come across a need for it, they would create new extension fields for each document stored alongside it in the database. Agents would then update the `context` documents to dictate how the new fields would work and how to use them for other agents. All of this would follow the same framework and logical requirements as the constitution would state for updating the `context` documents.
 
 I think this is going to be a core feature in this framework.
 
@@ -198,7 +198,7 @@ If the expected revision is stale, the CLI returns structured JSON like `{"error
 
 ## Future document type ideas
 
-Need process for convertin document class and extensible documents into revisions? how to do this while allowing document extensions to store props in revisions?
+Need a process for converting document classes and extensible documents into revisions? How do we do this while allowing document extensions to store props in revisions?
 
 classes and extending a base class, I would like there to be multiple types of documents, not just text based ones:
 
@@ -266,45 +266,45 @@ idk I can't think of any more?
 
 ### Shipped in v1
 
-I want the core logic to be abstracted functions in rust. Nothing more.
+I want the core logic to be abstracted functions in Rust. Nothing more.
 
-The first interface is the testing harness, then the cli.
+The first interface is the testing harness, then the CLI.
 
 ### Future interfaces
 
-Then we can build other interfaces like a web server api, MCP server, opencode tools. Etc.
+Then we can build other interfaces like a web server API, MCP server, and OpenCode tools.
 
 Priority:
 
-1. core functionality and functions
-2. testing interface and setup, directly tests the core functionality
-3. cli
-4. build out a server that's able to be self hosted
-5. mcp server, then hook the mcp server up to opencode on the local machine
+1. Core functionality and functions
+2. Testing interface and setup, directly tests the core functionality
+3. CLI
+4. Build out a server that's able to be self-hosted
+5. MCP server, then hook the MCP server up to OpenCode on the local machine
 
 ## Future ideas and non finalized notes
 
 These are not shipped v1 features. They are design direction and open ideas.
 
-I want to build out the core logic for the entire system in rust, independent from any usage interface (cli, api, mcp, etc)
+I want to build out the core logic for the entire system in Rust, independent from any usage interface (CLI, API, MCP, etc.).
 
-the core of this system should not be specific to programming or developers and software development as a goal. it should be general for writitng, server/homelab management, database/spread sheet management, and general computer stuff.
+The core of this system should not be specific to programming, developers, or software development as a goal. It should be general for writing, server/homelab management, database/spreadsheet management, and general computer tasks.
 
-Accept that the agent will have to do some retreival manually? Let it decide when it needs more context via calls?
+Accept that the agent will have to do some retrieval manually? Let it decide when it needs more context via calls?
 
-simple per document revision model, not full git level diffing stuff. Google doc versioning.
+Simple per-document revision model, not full git-level diffing stuff. Google Docs versioning.
 
-Allow tools to be run on documents, say like `ripgrep` or regex or echo a system log into a document content and create a document from that so the llm doesn't have to directly process a whole log into context in order to store it.
+Allow tools to be run on documents, such as `ripgrep` or regex, or echo a system log into document content and create a document from that so the LLM does not have to directly process a whole log into context in order to store it.
 
-key thing to keep in mind: we aren't trying to normalize arbitrary data itself, we are trying to organize it, and search through it using tools designed to search through arbitrary data. Keyword search, date matching, id matching, role matching, vector relevance search, etc. it's the agent's/llm's job to use that arbitrary data arbitrarily.
+Key thing to keep in mind: we are not trying to normalize arbitrary data itself; we are trying to organize it and search through it using tools designed to search through arbitrary data. Keyword search, date matching, ID matching, role matching, vector relevance search, etc. It is the agent's/LLM's job to use that arbitrary data arbitrarily.
 
-It would be smart to design this so that in the future there can be multiple clients connected to the same db, allow for documents to be assigned to a given client, so that each agent can modify a given document however they see fit.
+It would be smart to design this so that in the future there can be multiple clients connected to the same DB, allowing documents to be assigned to a given client so that each agent can modify a given document however they see fit.
 
-I could eventually something where when a document is updated, an agent is called to validate the update before it's written to ensure it conforms to a 'validator' or something, similar to validation in other databases but for arbitrary data. not that it would be safe with prompt injecting, but it would be cool for verification of abstract ideas like "writing style". Things that we can't easily create regex for.
+I could eventually build something where, when a document is updated, an agent is called to validate the update before it's written to ensure it conforms to a "validator" or something, similar to validation in other databases but for arbitrary data. Not that it would be safe against prompt injection, but it would be cool for verification of abstract ideas like "writing style". Things that we cannot easily express with regex.
 
 or watchers could be used for other things? idk
 
-TODO/Later: linked documents, similar to how Obsidean works I guess? Why not have a structured way to link/cite other documents throughout a given document:
+TODO/Later: linked documents, similar to how Obsidian works I guess? Why not have a structured way to link/cite other documents throughout a given document:
 
 ```json
 links: [
@@ -319,19 +319,19 @@ This wouldn't be just within the extensions, it would be a baked in thing in all
 
 This would allow for cross document linking and searching and potentially something like a document tree context loading mechanism? or at least searching. might aid in searches stronger than pure vector search, at least with known concepts.
 
-Maybe there can also be some validation here when the documents get's created/updated that the ids in the links array are present in the db.
+Maybe there can also be some validation here when the documents get created or updated that the IDs in the links array are present in the DB.
 
-The index order of the id is the index that the llms should use to cite specific facts in their content. so to reference document_1 here in this sentence, I would just do this. [0].
+The index order of the ID is the index that the LLMs should use to cite specific facts in their content. So to reference document_1 here in this sentence, I would just do this: [0].
 
 ## v1 foundation that is now shipped
 
 Suggested development phases to follow. This is effectively the order that produced v1:
 
-1. Define the document model for postgress and rust. create a struct/class for the documents that is extensible, both in rust and postgress, in the ways described above.
-2. Define the `core` library, struct/class thingy. This should be extensible and define all the types and stuff. need to keep in mind the core logic needs to be agnostic from a database, since we want to store and parity data in things like vectordbs in the future.
-3. Create the `Init` function, should simply return the local `./governance` md files, as well as any active type = `context` documents found in the database that aren't archived or deleted.
-4. `Create` function, takes parameters for creating a document. Lets the LLMs define the type, content, and extensions of a document. `constitution` type is a system locked type, agents should never be allowed to create one.
-5. `Query` function, sql style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT`, tool. Use SQL-shaped parameter names so it feels familiar to llms. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
+1. Define the document model for Postgres and Rust. Create a struct/class for the documents that is extensible, both in Rust and Postgres, in the ways described above.
+2. Define the `core` library, struct/class thingy. This should be extensible and define all the types and stuff. Need to keep in mind the core logic needs to be agnostic from a database, since we want to store parity data in things like vector DBs in the future.
+3. Create the `Init` function, which should simply return the local `./governance` MD files, as well as any active `type = context` documents found in the database that are not archived or deleted.
+4. `Create` function, takes parameters for creating a document. Let the LLMs define the type, content, and extensions of a document. `constitution` type is a system-locked type, and agents should never be allowed to create one.
+5. `Query` function, SQL-style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT` tool. Use SQL-shaped parameter names so it feels familiar to LLMs. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
 6. `Read` function, this fetches the full contents of documents.
 7. `Update` function, create a revision abstraction tool that updates a given document while storing previous revision history.
 8. Add the test harness.
@@ -341,10 +341,10 @@ Suggested development phases to follow. This is effectively the order that produ
 
 # How to use:
 
-Prerequisite: install and configure OpenCode.
+Prerequisites: install and configure OpenCode.
 
-for OpenCode:
-1. setup Docracy mcp config:
+For OpenCode:
+1. Set up Docracy MCP config:
 ```json
 "mcp": {
   "docracy": {
@@ -366,14 +366,14 @@ for OpenCode:
   }
 }
 ```
-2. Run the docker compose file:
+2. Run the Docker Compose file:
 ```bash
 cd ./docracy
 docker compose up -d
 ```
-3. Add an AGENTS.md file to your repo, and place something like this in it:
+3. Add an AGENTS.md file to your repo and place something like this in it:
 ```md
 <!-- DOCRACY -->
 Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
 ```
-4. Start chatting!! Now the docracy constitution and your agent generated context documents will be auto loaded into all your future conversations with a given repo!
+4. Start chatting. Now the Docracy constitution and your agent-generated context documents will be auto-loaded into all your future conversations with a given repo.
