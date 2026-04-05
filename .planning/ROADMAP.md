@@ -82,7 +82,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Tool Surface + Stdio Delivery | 0/2 | Planned | - |
 | 3. Streamable HTTP + Client Compatibility | 0/2 | Planned | - |
 | 4. Verification + Documentation Hardening | 0/2 | Planned | - |
-| 5. Governance Model Cleanup | 0/2 | Planned | - |
+| 5. Governance Model Cleanup | 2/2 | Complete   | 2026-04-06 |
 
 ## Archived Milestones
 
@@ -93,8 +93,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 **Goal**: Governance is modeled as a normal repo-owned document type, existing constitution rows are migrated to governance, and CLI/MCP always resolve the fixed repo-owned `./governance` bundle.
 **Requirements**: GOV-05, GOV-06, GOV-07, DOC-03
 **Depends on:** Phase 4
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 05-01: Governance document type rename + persistence migration
-- [ ] 05-02: Fixed repo-owned governance path + documentation refresh
+- [x] 05-01: Governance document type rename + persistence migration
+- [x] 05-02: Fixed repo-owned governance path + documentation refresh

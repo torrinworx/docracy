@@ -41,10 +41,10 @@
 
 ### Governance Cleanup
 
-- [ ] **GOV-05**: Init and persistence use document type `governance` for the repo-owned instructions doc instead of `constitution`.
-- [ ] **GOV-06**: User-facing validation and database rules no longer special-case constitution; only the governance doc type remains reserved for repo-owned instructions.
-- [ ] **GOV-07**: CLI and MCP startup always load the repo-owned `./governance` bundle and do not accept arbitrary governance-directory overrides.
-- [ ] **DOC-03**: Public docs explain the governance document type and the fixed `./governance` startup path.
+- [x] **GOV-05**: Init and persistence use document type `governance` for the repo-owned instructions doc instead of `constitution`.
+- [x] **GOV-06**: User-facing validation and database rules no longer special-case constitution; only the governance doc type remains reserved for repo-owned instructions.
+- [x] **GOV-07**: CLI and MCP startup always load the repo-owned `./governance` bundle and do not accept arbitrary governance-directory overrides.
+- [x] **DOC-03**: Public docs explain the governance document type and the fixed `./governance` startup path.
 
 ## Deferred / Out of Scope for v1.1
 

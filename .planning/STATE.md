@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: in_progress
-stopped_at: Phase 2 executing (02-tool-surface-stdio-delivery)
-last_updated: "2026-04-06T02:40:00Z"
+stopped_at: Completed 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions
+last_updated: "2026-04-06T19:48:18Z"
 progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 8
-  completed_plans: 2
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 13
+  completed_plans: 13
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 2 — tool-surface-stdio-delivery
+**Current focus:** Phase 5 — governance cleanup
 
 ## Current Position
 
-Phase: 2 (tool-surface-stdio-delivery) — EXECUTING
-Plan: 1 of 2
+Phase: 5 (governance cleanup) — COMPLETE
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -57,6 +57,8 @@ Plan: 1 of 2
 | Phase 04 P01 | 12 min | 3 tasks | 6 files |
 | Phase 01-mcp-crate-interface-boundary P01 | 1 min | 3 tasks | 7 files |
 | Phase 01-mcp-crate-interface-boundary P02 | 4 min | 3 tasks | 6 files |
+| Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P01 | 5m | 2 tasks | 9 files |
+| Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P02 | 5m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -92,6 +94,8 @@ Recent decisions affecting current work:
 - [Milestone v1.1]: Keep v1.1 focused on MCP tools and defer OAuth/prompts/resources until the base interface is proven.
 - [Phase 01-mcp-crate-interface-boundary]: Keep crates/mcp library-first and transport-agnostic; transports wrap shared bootstrap
 - [Phase 01-mcp-crate-interface-boundary]: Own runtime/config in docracy-mcp; delegate business rules to docracy-core use-cases
+- [Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions]: Model the repo-owned instructions document as governance everywhere in core while preserving the on-disk bundle layout.
+- [Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions]: Lock CLI and MCP startup to a fixed repo-owned ./governance bundle helper instead of passing a path override through startup config.
 
 ### Milestone Setup
 
@@ -99,6 +103,10 @@ Recent decisions affecting current work:
 - v1.1 is now defined in `.planning/REQUIREMENTS.md` and `.planning/ROADMAP.md`.
 - MCP research and client-compatibility notes are captured in `.planning/research/MCP_SERVER.md`.
 - Phase 1 planning artifacts are captured in `.planning/phases/01-mcp-crate-interface-boundary/`.
+
+### Roadmap Evolution
+
+- Phase 5 added: Clean up governance model: make all governance docs type=governance, remove constitution special-case, and ensure Docracy always resolves ./governance as repo-owned instructions.
 
 ### Pending Todos
 
@@ -117,6 +125,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-06T00:54:18.577Z
-Stopped at: Completed 01-mcp-crate-interface-boundary/01-02-PLAN.md
+Last session: 2026-04-06T19:48:18.070Z
+Stopped at: Completed 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions
 Resume file: None
