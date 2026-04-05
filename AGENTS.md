@@ -1,3 +1,6 @@
+<!-- DOCRACY -->
+Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
+
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
