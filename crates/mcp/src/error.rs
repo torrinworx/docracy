@@ -16,7 +16,7 @@ pub enum McpErrorKind {
     RevisionConflict,
     StorageError,
     GovernanceIoError,
-    MissingConstitution,
+    MissingGovernance,
     DocumentNotFound,
     RevisionNotFound,
     MissingCurrentRevision,
@@ -61,9 +61,9 @@ impl McpError {
             CoreError::Governance(GovernanceError::Io(message)) => {
                 McpError::new(McpErrorKind::GovernanceIoError, message)
             }
-            CoreError::Governance(GovernanceError::MissingConstitution) => McpError::new(
-                McpErrorKind::MissingConstitution,
-                "missing CONSTITUTION.md in governance bundle",
+            CoreError::Governance(GovernanceError::MissingGovernance) => McpError::new(
+                McpErrorKind::MissingGovernance,
+                "missing governance instructions in governance bundle",
             ),
             CoreError::DocumentNotFound => {
                 McpError::new(McpErrorKind::DocumentNotFound, err.to_string())

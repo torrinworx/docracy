@@ -22,11 +22,11 @@ impl MemoryRepository {
         if self.documents.contains_key(&doc.id) {
             return Err(RepoError::Conflict);
         }
-        if doc.doc_type.as_str() == DocumentType::CONSTITUTION
+        if doc.doc_type.as_str() == DocumentType::GOVERNANCE
             && self
                 .documents
                 .values()
-                .any(|d| d.doc_type.as_str() == DocumentType::CONSTITUTION)
+                .any(|d| d.doc_type.as_str() == DocumentType::GOVERNANCE)
         {
             return Err(RepoError::Conflict);
         }
@@ -38,11 +38,11 @@ impl MemoryRepository {
         if !self.documents.contains_key(&doc.id) {
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
-        if doc.doc_type.as_str() == DocumentType::CONSTITUTION
+        if doc.doc_type.as_str() == DocumentType::GOVERNANCE
             && self
                 .documents
                 .values()
-                .any(|d| d.doc_type.as_str() == DocumentType::CONSTITUTION && d.id != doc.id)
+                .any(|d| d.doc_type.as_str() == DocumentType::GOVERNANCE && d.id != doc.id)
         {
             return Err(RepoError::Conflict);
         }

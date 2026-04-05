@@ -15,8 +15,8 @@ pub enum ValidationError {
     #[error("{field} must match [a-z][a-z0-9_]*")]
     InvalidSlug { field: &'static str },
 
-    #[error("document type 'constitution' is reserved for the system")]
-    ReservedConstitutionType,
+    #[error("document type 'governance' is reserved for the system")]
+    ReservedGovernanceType,
 
     #[error("content must not be null")]
     ContentNull,
@@ -58,8 +58,8 @@ pub(crate) fn validate_slug(field: &'static str, value: &str) -> ValidationResul
 }
 
 pub(crate) fn validate_mutable_document_type(doc_type: &DocumentType) -> ValidationResult<()> {
-    if doc_type.is_constitution() {
-        return Err(ValidationError::ReservedConstitutionType);
+    if doc_type.is_governance() {
+        return Err(ValidationError::ReservedGovernanceType);
     }
 
     Ok(())
@@ -71,11 +71,11 @@ mod tests {
     use crate::document::DocumentType;
 
     #[test]
-    fn validate_mutable_document_type_rejects_constitution() {
-        let doc_type = DocumentType::new(DocumentType::CONSTITUTION).unwrap();
+    fn validate_mutable_document_type_rejects_governance() {
+        let doc_type = DocumentType::new(DocumentType::GOVERNANCE).unwrap();
         assert_eq!(
             validate_mutable_document_type(&doc_type).unwrap_err(),
-            ValidationError::ReservedConstitutionType
+            ValidationError::ReservedGovernanceType
         );
     }
 }

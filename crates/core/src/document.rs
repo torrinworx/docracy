@@ -11,7 +11,7 @@ use serde_json::{Map, Value};
 pub struct DocumentType(String);
 
 impl DocumentType {
-    pub const CONSTITUTION: &'static str = "constitution";
+    pub const GOVERNANCE: &'static str = "governance";
     pub const CONTEXT: &'static str = "context";
     pub const GENERAL: &'static str = "general";
     pub const CHATS: &'static str = "chats";
@@ -26,8 +26,8 @@ impl DocumentType {
         &self.0
     }
 
-    pub fn is_constitution(&self) -> bool {
-        self.0 == Self::CONSTITUTION
+    pub fn is_governance(&self) -> bool {
+        self.0 == Self::GOVERNANCE
     }
 }
 
@@ -183,15 +183,15 @@ mod tests {
     }
 
     #[test]
-    fn new_document_rejects_constitution_type() {
+    fn new_document_rejects_governance_type() {
         let nd = NewDocument {
-            doc_type: DocumentType::new(DocumentType::CONSTITUTION).unwrap(),
+            doc_type: DocumentType::new(DocumentType::GOVERNANCE).unwrap(),
             content: json!("hi"),
             extensions: Extensions::new(),
         };
         assert_eq!(
             nd.validate().unwrap_err(),
-            ValidationError::ReservedConstitutionType
+            ValidationError::ReservedGovernanceType
         );
     }
 

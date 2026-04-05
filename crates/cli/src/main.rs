@@ -259,9 +259,9 @@ fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
                     message: message.clone(),
                     details: None,
                 },
-                CoreError::Governance(GovernanceError::MissingConstitution) => CliErrorBody {
-                    kind: "missing_constitution".to_string(),
-                    message: "missing CONSTITUTION.md in governance bundle".to_string(),
+                CoreError::Governance(GovernanceError::MissingGovernance) => CliErrorBody {
+                    kind: "missing_governance".to_string(),
+                    message: "missing governance instructions in governance bundle".to_string(),
                     details: None,
                 },
                 CoreError::DocumentNotFound => CliErrorBody {

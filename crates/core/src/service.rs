@@ -167,7 +167,7 @@ async fn update_document_internal(
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
     input: UpdateDocumentInput,
-    allow_constitution: bool,
+    allow_governance: bool,
 ) -> Result<UpdateDocumentResult, CoreError> {
     if input.content.is_none() && input.extensions.is_none() && input.status.is_none() {
         return Err(CoreError::NoChanges);
@@ -177,8 +177,8 @@ async fn update_document_internal(
         .get_document(input.id)
         .await?
         .ok_or(CoreError::DocumentNotFound)?;
-    if !allow_constitution && doc.doc_type.is_constitution() {
-        return Err(ValidationError::ReservedConstitutionType.into());
+    if !allow_governance && doc.doc_type.is_governance() {
+        return Err(ValidationError::ReservedGovernanceType.into());
     }
     let current_rev_id = doc
         .current_revision_id
@@ -281,15 +281,14 @@ pub async fn init_bundle(
 ) -> Result<InitBundleResult, CoreError> {
     let bundle = governance.load_bundle()?;
 
-    // Bootstrap constitution into the DB if missing (or repair it to match the immutable file).
-    let constitution_md = bundle
+    // Bootstrap the governance instructions into the DB if missing (or repair it to match the immutable file).
+    let governance_md = bundle
         .files
-        .iter()
-        .find(|f| f.name == "CONSTITUTION.md")
-        .ok_or(crate::errors::GovernanceError::MissingConstitution)?
+        .first()
+        .ok_or(crate::errors::GovernanceError::MissingGovernance)?
         .content
         .clone();
-    reconcile_constitution(repo, clock, ids, &constitution_md).await?;
+    reconcile_governance(repo, clock, ids, &governance_md).await?;
 
     let context_documents = repo.list_active_context_documents().await?;
     Ok(InitBundleResult {
@@ -298,16 +297,16 @@ pub async fn init_bundle(
     })
 }
 
-async fn reconcile_constitution(
+async fn reconcile_governance(
     repo: &mut dyn Repository,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
-    constitution_md: &str,
+    governance_md: &str,
 ) -> Result<(), CoreError> {
-    let expected = Value::String(constitution_md.to_string());
+    let expected = Value::String(governance_md.to_string());
 
     let existing = repo
-        .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
+        .find_latest_document_by_type(crate::document::DocumentType::GOVERNANCE)
         .await?;
 
     if existing.is_none() {
@@ -330,9 +329,7 @@ async fn reconcile_constitution(
 
         let document = Document {
             id: doc_id,
-            doc_type: crate::document::DocumentType::new(
-                crate::document::DocumentType::CONSTITUTION,
-            )?,
+            doc_type: crate::document::DocumentType::new(crate::document::DocumentType::GOVERNANCE)?,
             status: DocumentStatus::active(),
             created_at: now,
             modified_at: now,
@@ -354,7 +351,7 @@ async fn reconcile_constitution(
     }
 
     match repo
-        .find_latest_document_by_type(crate::document::DocumentType::CONSTITUTION)
+        .find_latest_document_by_type(crate::document::DocumentType::GOVERNANCE)
         .await?
         .or(existing)
     {
@@ -569,22 +566,22 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn init_bootstraps_missing_constitution() {
+    async fn init_bootstraps_missing_governance() {
         let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let clock = FixedClock(now);
 
         let td = TempDir::new().unwrap();
-        std::fs::write(td.path().join("CONSTITUTION.md"), "hello constitution").unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello governance").unwrap();
 
         let governance = crate::FsGovernanceSource::new(td.path());
 
         let context_doc_id = DocumentId(Uuid::from_u128(10));
-        let constitution_doc_id = DocumentId(Uuid::from_u128(11));
+        let governance_doc_id = DocumentId(Uuid::from_u128(11));
         let context_rev_id = RevisionId(Uuid::from_u128(12));
-        let constitution_rev_id = RevisionId(Uuid::from_u128(13));
+        let governance_rev_id = RevisionId(Uuid::from_u128(13));
         let ids = SeqIds {
-            docs: vec![context_doc_id, constitution_doc_id],
-            revs: vec![context_rev_id, constitution_rev_id],
+            docs: vec![context_doc_id, governance_doc_id],
+            revs: vec![context_rev_id, governance_rev_id],
             doc_idx: std::cell::Cell::new(0),
             rev_idx: std::cell::Cell::new(0),
         };
@@ -610,13 +607,13 @@ mod tests {
         assert_eq!(out.context_documents, vec![context.document]);
 
         let doc = repo
-            .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .find_latest_document_by_type(DocumentType::GOVERNANCE)
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(doc.id, constitution_doc_id);
+        assert_eq!(doc.id, governance_doc_id);
         assert_eq!(doc.status.as_str(), DocumentStatus::ACTIVE);
-        assert_eq!(doc.content, Value::String("hello constitution".to_string()));
+        assert_eq!(doc.content, Value::String("hello governance".to_string()));
         let rev = repo
             .get_revision(doc.current_revision_id.unwrap())
             .await
@@ -626,12 +623,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn init_repairs_constitution_content_mismatch() {
+    async fn init_repairs_governance_content_mismatch() {
         let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
 
         let td = TempDir::new().unwrap();
-        let constitution_path = td.path().join("CONSTITUTION.md");
-        std::fs::write(&constitution_path, "v1").unwrap();
+        let governance_path = td.path().join("CONSTITUTION.md");
+        std::fs::write(&governance_path, "v1").unwrap();
         let governance = crate::FsGovernanceSource::new(td.path());
 
         let doc_id = DocumentId(Uuid::from_u128(20));
@@ -648,7 +645,7 @@ mod tests {
             .await
             .unwrap();
 
-        std::fs::write(&constitution_path, "v2").unwrap();
+        std::fs::write(&governance_path, "v2").unwrap();
         init_bundle(
             &mut repo,
             &governance,
@@ -659,7 +656,7 @@ mod tests {
         .unwrap();
 
         let doc = repo
-            .find_latest_document_by_type(DocumentType::CONSTITUTION)
+            .find_latest_document_by_type(DocumentType::GOVERNANCE)
             .await
             .unwrap()
             .unwrap();
@@ -677,7 +674,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn update_document_rejects_constitution_type() {
+    async fn update_document_rejects_governance_type() {
         let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
         let clock = FixedClock(now);
 
@@ -693,7 +690,7 @@ mod tests {
         let (document, revision) = seeded_document(doc_id, rev1, now, json!({"text": "const"}));
         repo.create_document_with_revision(
             Document {
-                doc_type: DocumentType::new(DocumentType::CONSTITUTION).unwrap(),
+                doc_type: DocumentType::new(DocumentType::GOVERNANCE).unwrap(),
                 ..document
             },
             revision,
@@ -718,7 +715,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            CoreError::Validation(ValidationError::ReservedConstitutionType)
+            CoreError::Validation(ValidationError::ReservedGovernanceType)
         ));
     }
 
