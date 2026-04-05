@@ -39,6 +39,13 @@
 - [ ] **DOC-01**: Documentation shows how to run the MCP server locally, configure OpenCode/OpenWebUI, and troubleshoot common setup issues.
 - [x] **DOC-02**: Documentation explains the interface boundary so future API/MCP work does not pull business rules out of the core.
 
+### Governance Cleanup
+
+- [ ] **GOV-05**: Init and persistence use document type `governance` for the repo-owned instructions doc instead of `constitution`.
+- [ ] **GOV-06**: User-facing validation and database rules no longer special-case constitution; only the governance doc type remains reserved for repo-owned instructions.
+- [ ] **GOV-07**: CLI and MCP startup always load the repo-owned `./governance` bundle and do not accept arbitrary governance-directory overrides.
+- [ ] **DOC-03**: Public docs explain the governance document type and the fixed `./governance` startup path.
+
 ## Deferred / Out of Scope for v1.1
 
 Explicitly excluded to keep the milestone focused on the first MCP interface layer.
@@ -73,10 +80,14 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | TST-02 | Phase 4 | Planned |
 | DOC-01 | Phase 4 | Planned |
 | DOC-02 | Phase 1 | Complete |
+| GOV-05 | Phase 5 | Planned |
+| GOV-06 | Phase 5 | Planned |
+| GOV-07 | Phase 5 | Planned |
+| DOC-03 | Phase 5 | Planned |
 
 **Coverage:**
-- v1.1 requirements: 18 total
-- Mapped to phases: 18
+- v1.1 requirements: 22 total
+- Mapped to phases: 22
 - Unmapped: 0
 
 ---

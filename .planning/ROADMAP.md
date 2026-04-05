@@ -74,7 +74,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -82,7 +82,19 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Tool Surface + Stdio Delivery | 0/2 | Planned | - |
 | 3. Streamable HTTP + Client Compatibility | 0/2 | Planned | - |
 | 4. Verification + Documentation Hardening | 0/2 | Planned | - |
+| 5. Governance Model Cleanup | 0/2 | Planned | - |
 
 ## Archived Milestones
 
 - ✅ **v1.0 MVP** — shipped 2026-04-05; archive: `.planning/milestones/v1.0-ROADMAP.md`
+
+### Phase 5: Clean up governance model: make all governance docs type=governance, remove constitution special-case, and ensure Docracy always resolves ./governance as repo-owned instructions.
+
+**Goal**: Governance is modeled as a normal repo-owned document type, existing constitution rows are migrated to governance, and CLI/MCP always resolve the fixed repo-owned `./governance` bundle.
+**Requirements**: GOV-05, GOV-06, GOV-07, DOC-03
+**Depends on:** Phase 4
+**Plans:** 2 plans
+
+Plans:
+- [ ] 05-01: Governance document type rename + persistence migration
+- [ ] 05-02: Fixed repo-owned governance path + documentation refresh
