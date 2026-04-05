@@ -11,7 +11,7 @@ Docracy v1.0 is the Postgres-backed document store, revision model, test harness
 - Init/Create/Read/Query/Update are implemented.
 - Documents have `type`, `status`, timestamps, `content`, `extensions`, and a current revision head.
 - Updates create immutable revisions and require `expected_revision` so stale writes fail.
-- `Init` returns governance markdown files and active `context` documents created by other agents.
+- `Init` returns the repo-owned `./governance` markdown files and active `context` documents created by other agents.
 - Postgres migrations, full-text content search, filtering, ordering, pagination, and tests are in place.
 
 Future ideas and non-finalized notes are kept separate below so the current v1 behavior is easy to read.
@@ -20,7 +20,7 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 
 ### Shipped in v1
 
-- **Init**, to agents: 'load this to learn how the system works.' In v1 this returns the local `./governance` markdown files, as well as any active `type = context` documents found in the database that are not archived or deleted. It also ensures the stored constitution matches the repo copy.
+- **Init**, to agents: 'load this to learn how the system works.' In v1 this returns the repo-owned `./governance` markdown files, as well as any active `type = context` documents found in the database that are not archived or deleted. It also ensures the stored governance document matches the repo copy.
 - **Create**, allows agents to create a refined document, pass it in, and store it in the PostgreSQL document DB.
 - **Read**, this fetches the full contents of current documents by id.
 - **Query**, an SQL-style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT` tool for current documents. Keyword search runs over document content. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
@@ -40,9 +40,9 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 - **Document Database.** The primary source of bureaucracy.
 - **Postgres backend.** The first durable storage layer for the document database.
 - **Tests**, a simple self-contained testing harness and unit/integration tests.
-- **Governance seed contexts.** The system is provided with 'seed contexts' governance documents that allow it to function. This includes 1. general context about how to use the system and a solid non-writable constitution document, 2. project-specific context documents that are editable by agents with guidance from the constitution. These documents are loaded in and are like the "school" phase; they get any agent up to speed on the general vibe of the project without wasting tokens.
+- **Governance seed contexts.** The system is provided with repo-owned governance documents that allow it to function. This includes 1. general context about how to use the system and a solid non-writable governance document, 2. project-specific context documents that are editable by agents with guidance from the governance document. These documents are loaded in and are like the "school" phase; they get any agent up to speed on the general vibe of the project without wasting tokens.
 
-`CONSTITUTION.md` is immutable and part of the codebase. The DB copy is expected to reflect it.
+The repo-owned governance bundle under `./governance` is immutable and part of the codebase. The DB copy is expected to reflect it.
 
 ### Future ideas
 
@@ -52,7 +52,7 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 
 ### Shipped in v1
 
-- **constitution** hard-coded in this repo, stored in the DB on init, loaded on every call of `Init`.
+- **governance** hard-coded in this repo, stored in the DB on init, loaded on every call of `Init`.
 - **context** general knowledge and things an agent needs to know for the project; generalized information can be stored in any number of documents, but these are always present while active. CRUD operations work for these, and they are important because they are loaded into every context for every future agent.
 - **general** general knowledge store, intended to create a store whenever there is a learning, decision, or piece of information created by the user or an agent. This is the "agent bureaucracy" side of things. The agent can freely control how general documents are stored and created, how they reference each other, and what type and quality of information they store. It is ideal that they outline the structure of their documents in the seed context documents.
 
@@ -89,7 +89,7 @@ The goal with these is to extend the document system so that LLMs can attach rep
 
 They can then outline how to define these in the document extensions on the Create request and how to surface them in Read responses.
 
-Whenever agents come across a need for it, they would create new extension fields for each document stored alongside it in the database. Agents would then update the `context` documents to dictate how the new fields would work and how to use them for other agents. All of this would follow the same framework and logical requirements as the constitution would state for updating the `context` documents.
+Whenever agents come across a need for it, they would create new extension fields for each document stored alongside it in the database. Agents would then update the `context` documents to dictate how the new fields would work and how to use them for other agents. All of this would follow the same framework and logical requirements as the governance document would state for updating the `context` documents.
 
 I think this is going to be a core feature in this framework.
 
@@ -110,7 +110,7 @@ Current document shape:
   deleted_at: null,
 
   // set by agents, function inputs, or the calling interface:
-  type: 'constitution | context | general | ...',
+  type: 'governance | context | general | ...',
   content: '...', // any non-null JSON
   extensions: {
     // extensions
@@ -329,8 +329,8 @@ Suggested development phases to follow. This is effectively the order that produ
 
 1. Define the document model for Postgres and Rust. Create a struct/class for the documents that is extensible, both in Rust and Postgres, in the ways described above.
 2. Define the `core` library, struct/class thingy. This should be extensible and define all the types and stuff. Need to keep in mind the core logic needs to be agnostic from a database, since we want to store parity data in things like vector DBs in the future.
-3. Create the `Init` function, which should simply return the local `./governance` MD files, as well as any active `type = context` documents found in the database that are not archived or deleted.
-4. `Create` function, takes parameters for creating a document. Let the LLMs define the type, content, and extensions of a document. `constitution` type is a system-locked type, and agents should never be allowed to create one.
+   3. Create the `Init` function, which should simply return the repo-owned `./governance` MD files, as well as any active `type = context` documents found in the database that are not archived or deleted.
+   4. `Create` function, takes parameters for creating a document. Let the LLMs define the type, content, and extensions of a document. `governance` type is a system-locked type, and agents should never be allowed to create one.
 5. `Query` function, SQL-style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT` tool. Use SQL-shaped parameter names so it feels familiar to LLMs. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
 6. `Read` function, this fetches the full contents of documents.
 7. `Update` function, create a revision abstraction tool that updates a given document while storing previous revision history.
@@ -357,8 +357,6 @@ For OpenCode:
       "--bin",
       "docracy-mcp",
       "--",
-      "--governance-dir",
-      "./governance"
     ],
     "environment": {
       "DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy"
@@ -376,4 +374,4 @@ docker compose up -d
 <!-- DOCRACY -->
 Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
 ```
-4. Start chatting. Now the Docracy constitution and your agent-generated context documents will be auto-loaded into all your future conversations with a given repo.
+4. Start chatting. Now the Docracy governance documents and your agent-generated context documents will be auto-loaded into all your future conversations with a given repo.

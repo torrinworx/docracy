@@ -97,7 +97,7 @@ Output:
 ## Alignment With CLI
 
 - The tool inputs/outputs intentionally mirror the CLI JSON contract.
-- `init` is a tool call, but server startup configuration (database URL, governance dir, migration policy) is handled at process startup rather than via tool parameters.
+- `init` is a tool call, but server startup configuration (database URL, fixed repo-owned `./governance` bundle, migration policy) is handled at process startup rather than via tool parameters.
 
 ## Error Contract
 
