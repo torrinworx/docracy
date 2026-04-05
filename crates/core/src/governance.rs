@@ -27,6 +27,10 @@ impl FsGovernanceSource {
         Self { dir: dir.into() }
     }
 
+    pub fn repo_owned() -> Self {
+        Self::new("./governance")
+    }
+
     fn dir(&self) -> &Path {
         &self.dir
     }

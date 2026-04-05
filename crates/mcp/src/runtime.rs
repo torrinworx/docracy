@@ -38,7 +38,7 @@ pub async fn bootstrap(config: &McpStartupConfig) -> anyhow::Result<McpRuntime> 
 
     Ok(McpRuntime {
         repo,
-        governance: FsGovernanceSource::new(config.governance_dir.clone()),
+        governance: FsGovernanceSource::repo_owned(),
         clock: SystemClock,
         ids: UuidV4Generator,
     })

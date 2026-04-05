@@ -17,7 +17,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::io::Read;
-use std::path::PathBuf;
 
 #[derive(Debug, Serialize)]
 struct CliErrorResponse {
@@ -53,11 +52,8 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Load governance docs + active context docs. Bootstraps constitution if missing.
+    /// Load governance docs + active context docs. Bootstraps the repo-owned governance doc if missing.
     Init {
-        /// Governance directory (default: ./governance)
-        #[arg(long, default_value = "./governance")]
-        governance_dir: PathBuf,
     },
 
     /// Create a document (JSON input)
@@ -140,8 +136,8 @@ async fn run() -> Result<()> {
     let output = match cli.command {
         Command::Migrate => json!({"ok": true}),
 
-        Command::Init { governance_dir } => {
-            let governance = FsGovernanceSource::new(governance_dir);
+        Command::Init {} => {
+            let governance = FsGovernanceSource::repo_owned();
             let out = init_bundle(&mut repo, &governance, &clock, &ids).await?;
 
             let governance_files: Vec<Value> = out

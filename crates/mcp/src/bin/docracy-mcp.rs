@@ -13,10 +13,6 @@ struct Args {
     #[arg(long)]
     database_url: Option<String>,
 
-    /// Path to the governance directory.
-    #[arg(long, default_value = "./governance")]
-    governance_dir: std::path::PathBuf,
-
     /// Skip SQL migrations on startup.
     #[arg(long)]
     no_migrate: bool,
@@ -49,7 +45,6 @@ async fn run() -> anyhow::Result<()> {
 
     let config = McpStartupConfig {
         database_url,
-        governance_dir: args.governance_dir,
         run_migrations: !args.no_migrate,
         transport: McpTransport::Stdio,
     };

@@ -1,7 +1,5 @@
 //! MCP-owned startup configuration.
 
-use std::path::PathBuf;
-
 /// Which transport the MCP server should run on.
 ///
 /// Phase 1 only needs a selection enum so future stdio/HTTP entrypoints share a
@@ -22,8 +20,6 @@ pub enum McpTransport {
 pub struct McpStartupConfig {
     /// Postgres connection string.
     pub database_url: String,
-    /// Governance directory containing the markdown bundle.
-    pub governance_dir: PathBuf,
     /// Whether to run SQL migrations during startup.
     pub run_migrations: bool,
     /// Which transport the outer entrypoint should serve.
@@ -33,13 +29,11 @@ pub struct McpStartupConfig {
 impl McpStartupConfig {
     pub fn new(
         database_url: impl Into<String>,
-        governance_dir: impl Into<PathBuf>,
         run_migrations: bool,
         transport: McpTransport,
     ) -> Self {
         Self {
             database_url: database_url.into(),
-            governance_dir: governance_dir.into(),
             run_migrations,
             transport,
         }
