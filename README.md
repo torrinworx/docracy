@@ -135,7 +135,19 @@ revision: {
 
 In v1 the public interfaces are centered on current document create/read/query/update, while revisions are stored immutably underneath.
 
-Current `Query` payload:
+Current `Query` payload (raw SQL takes precedence when `sql` is present):
+
+```json
+{
+  "sql": "SELECT id, \"type\", status FROM documents WHERE status = 'active' ORDER BY modified_at DESC",
+  "limit": 25,
+  "timeout_ms": 2500
+}
+```
+
+Raw SQL executes in a read-only transaction, and the server clamps requests to 100 rows and 5000ms before execution.
+
+If `sql` is omitted, the guided path still works:
 
 ```json
 {
