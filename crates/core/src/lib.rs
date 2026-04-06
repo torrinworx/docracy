@@ -17,8 +17,8 @@ pub use governance::{FsGovernanceSource, GovernanceBundle, GovernanceFile, Gover
 pub use ids::{DocumentId, RevisionId};
 pub use memory::MemoryRepository;
 pub use query::{
-    DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult, QueryInput,
-    QueryResult,
+    DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult,
+    GuidedQueryInput, QueryExecution, QueryInput, QueryResult, RawQueryInput, RawQueryResult,
 };
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};

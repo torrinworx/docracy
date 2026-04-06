@@ -131,7 +131,7 @@ fn version_to_i32(version: u32) -> Result<i32, RepoError> {
         .map_err(|_| RepoError::Storage("revision version out of range".to_string()))
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Repository for PgRepository {
     async fn create_document_with_revision(
         &mut self,

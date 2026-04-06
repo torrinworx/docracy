@@ -1,14 +1,14 @@
 use crate::document::Document;
 use crate::errors::RepoError;
 use crate::ids::{DocumentId, RevisionId};
-use crate::query::{DocumentQuery, DocumentQueryResult};
+use crate::query::{DocumentQuery, DocumentQueryResult, RawQueryInput, RawQueryResult};
 use crate::revision::DocumentRevision;
 use async_trait::async_trait;
 
 /// Storage boundary for core logic.
 ///
 /// Concrete adapters (postgres, sqlite, in-memory, etc) implement this.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait Repository {
     async fn create_document_with_revision(
         &mut self,
@@ -44,4 +44,10 @@ pub trait Repository {
 
     async fn query_documents(&self, query: DocumentQuery)
         -> Result<DocumentQueryResult, RepoError>;
+
+    async fn query_raw_documents(&self, _query: RawQueryInput) -> Result<RawQueryResult, RepoError> {
+        Err(RepoError::Storage(
+            "raw SQL query execution is not supported by this repository".to_string(),
+        ))
+    }
 }
