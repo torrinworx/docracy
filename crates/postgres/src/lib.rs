@@ -14,6 +14,10 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
 
+const RAW_QUERY_LIMIT_CEILING: u32 = 100;
+const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
+const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
+
 pub struct PgRepository {
     pool: PgPool,
 }
@@ -129,6 +133,24 @@ fn extensions_as_value(ext: &Map<String, Value>) -> Value {
 fn version_to_i32(version: u32) -> Result<i32, RepoError> {
     i32::try_from(version)
         .map_err(|_| RepoError::Storage("revision version out of range".to_string()))
+}
+
+fn raw_query_limit(limit: Option<u32>) -> i64 {
+    i64::from(limit.unwrap_or(RAW_QUERY_DEFAULT_LIMIT).clamp(1, RAW_QUERY_LIMIT_CEILING))
+}
+
+fn raw_query_timeout(timeout_ms: Option<u64>) -> u64 {
+    timeout_ms
+        .unwrap_or(RAW_QUERY_TIMEOUT_CEILING_MS)
+        .clamp(1, RAW_QUERY_TIMEOUT_CEILING_MS)
+}
+
+fn wrap_raw_query(sql: &str) -> String {
+    format!("SELECT to_jsonb(raw_query) AS row FROM ({sql}) AS raw_query")
+}
+
+fn wrap_raw_count_query(sql: &str) -> String {
+    format!("SELECT COUNT(*)::bigint FROM ({sql}) AS raw_query")
 }
 
 #[async_trait(?Send)]
@@ -555,6 +577,64 @@ ORDER BY modified_at DESC
             documents: docs,
             total_count: total_count.max(0) as u64,
             next_cursor,
+        })
+    }
+
+    async fn query_raw_documents(
+        &self,
+        query: docracy_core::query::RawQueryInput,
+    ) -> Result<docracy_core::query::RawQueryResult, RepoError> {
+        let sql = query.sql.trim();
+        if sql.is_empty() {
+            return Err(RepoError::Storage(
+                "raw SQL query must not be empty".to_string(),
+            ));
+        }
+
+        let limit = raw_query_limit(query.limit);
+        let timeout_ms = raw_query_timeout(query.timeout_ms);
+        let count_sql = wrap_raw_count_query(sql);
+        let page_sql = format!("{} LIMIT $1", wrap_raw_query(sql));
+
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
+        sqlx::query("SET TRANSACTION READ ONLY")
+            .execute(&mut *tx)
+            .await
+            .map_err(map_sqlx_error)?;
+        sqlx::query_scalar::<_, String>("SELECT set_config('statement_timeout', $1, true)")
+            .bind(format!("{timeout_ms}ms"))
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        let total_count: i64 = sqlx::query_scalar(&count_sql)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        let rows: Vec<Value> = sqlx::query_scalar(&page_sql)
+            .bind(limit)
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(map_sqlx_error)?;
+
+        tx.commit().await.map_err(map_sqlx_error)?;
+
+        let rows = rows
+            .into_iter()
+            .map(|row| match row {
+                Value::Object(row) => row,
+                other => {
+                    let mut map = Map::new();
+                    map.insert("row".to_string(), other);
+                    map
+                }
+            })
+            .collect();
+
+        Ok(docracy_core::query::RawQueryResult {
+            rows,
+            total_count: total_count.max(0) as u64,
         })
     }
 }

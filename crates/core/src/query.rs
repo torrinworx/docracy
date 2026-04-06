@@ -81,6 +81,7 @@ pub struct GuidedQueryInput {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RawQueryInput {
     pub sql: String,
+    pub limit: Option<u32>,
     pub timeout_ms: Option<u64>,
 }
 
@@ -118,7 +119,11 @@ impl QueryInput {
         } = self;
 
         if let Some(sql) = sql {
-            return Ok(QueryExecution::Raw(RawQueryInput { sql, timeout_ms }));
+            return Ok(QueryExecution::Raw(RawQueryInput {
+                sql,
+                limit,
+                timeout_ms,
+            }));
         }
 
         // Parse where
@@ -533,6 +538,7 @@ mod tests {
         let execution = QueryInput {
             query: Some("needle".to_string()),
             sql: Some("select * from documents".to_string()),
+            limit: Some(25),
             timeout_ms: Some(2500),
             where_,
             order_by: vec![QueryOrderByInput {
@@ -550,6 +556,7 @@ mod tests {
             execution,
             QueryExecution::Raw(RawQueryInput {
                 sql: "select * from documents".to_string(),
+                limit: Some(25),
                 timeout_ms: Some(2500),
             })
         );

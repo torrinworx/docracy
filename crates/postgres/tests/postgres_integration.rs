@@ -5,6 +5,7 @@ use docracy_core::{
     create_document, init_bundle, query_documents, update_document, FsGovernanceSource, QueryInput,
     UpdateDocumentInput,
 };
+use docracy_core::query::RawQueryInput;
 use docracy_postgres::PgRepository;
 use serde_json::json;
 use serde_json::Map;
@@ -97,6 +98,20 @@ async fn assert_index_absent(repo: &PgRepository, index_name: &str) {
         .unwrap();
 
     assert_eq!(exists, None);
+}
+
+async fn seed_documents(repo: &PgRepository, count: i32) {
+    sqlx::query(
+        r#"
+INSERT INTO documents (id, "type", status, created_at, modified_at, content, extensions)
+SELECT gen_random_uuid(), 'general', 'active', now(), now(), jsonb_build_object('n', gs), '{}'::jsonb
+FROM generate_series(1, $1) AS gs
+        "#,
+    )
+    .bind(count)
+    .execute(repo.pool())
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -362,4 +377,74 @@ async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     .await;
 
     assert!(current_revision_update.is_err(), "cross-document current_revision_id update should fail");
+}
+
+#[tokio::test]
+async fn raw_sql_select_returns_json_maps() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let (repo, _schema_guard) = isolated_repo(&url).await;
+    repo.migrate().await.unwrap();
+    seed_documents(&repo, 3).await;
+
+    let out = repo
+        .query_raw_documents(RawQueryInput {
+            sql: r#"SELECT id, "type", status, content FROM documents ORDER BY created_at ASC"#.to_string(),
+            limit: Some(10),
+            timeout_ms: Some(1000),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(out.total_count, 3);
+    assert_eq!(out.rows.len(), 3);
+    assert!(out.rows.iter().all(|row| row.contains_key("id") && row.contains_key("type") && row.contains_key("status") && row.contains_key("content")));
+}
+
+#[tokio::test]
+async fn raw_sql_update_is_rejected_in_read_only_transaction() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let (repo, _schema_guard) = isolated_repo(&url).await;
+    repo.migrate().await.unwrap();
+    seed_documents(&repo, 1).await;
+
+    let err = repo
+        .query_raw_documents(RawQueryInput {
+            sql: r#"WITH updated AS (UPDATE documents SET status = 'archived' RETURNING *) SELECT * FROM updated"#.to_string(),
+            limit: Some(1),
+            timeout_ms: Some(1000),
+        })
+        .await
+        .unwrap_err();
+
+    let msg = format!("{err:?}");
+    assert!(msg.contains("read-only") || msg.contains("cannot execute UPDATE"));
+}
+
+#[tokio::test]
+async fn raw_sql_limit_is_clamped_to_server_ceiling() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let (repo, _schema_guard) = isolated_repo(&url).await;
+    repo.migrate().await.unwrap();
+    seed_documents(&repo, 101).await;
+
+    let out = repo
+        .query_raw_documents(RawQueryInput {
+            sql: r#"SELECT id, content FROM documents ORDER BY created_at ASC"#.to_string(),
+            limit: Some(1000),
+            timeout_ms: Some(1000),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(out.total_count, 101);
+    assert_eq!(out.rows.len(), 100);
 }
