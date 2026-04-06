@@ -185,6 +185,8 @@ pub struct ReadArgs {
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct QueryArgs {
     pub query: Option<String>,
+    pub sql: Option<String>,
+    pub timeout_ms: Option<u64>,
 
     #[serde(rename = "where", default)]
     pub where_: BTreeMap<String, Value>,
@@ -225,8 +227,8 @@ impl QueryArgs {
     fn into_core(self) -> docracy_core::query::QueryInput {
         docracy_core::query::QueryInput {
             query: self.query,
-            sql: None,
-            timeout_ms: None,
+            sql: self.sql,
+            timeout_ms: self.timeout_ms,
             where_: self.where_.into_iter().collect(),
             order_by: self
                 .order_by

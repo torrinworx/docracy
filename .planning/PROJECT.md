@@ -15,6 +15,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - Phase 4 closed the remaining audit evidence gap with dedicated verification artifacts and CLI stderr coverage.
 - v1.1 is now planned around adding an MCP server interface crate alongside the existing CLI.
 - v1.1 Phase 1 is complete: `crates/mcp` exists, owns runtime/config bootstrap, and delegates Init/Create/Read/Query/Update operations to `docracy_core` with interface-local error mapping + tests.
+- v1.1 Phase 7 is complete: query now supports a raw SQL escape hatch alongside the guided path, with read-only Postgres execution and documented ceilings.
 
 ## Requirements
 
@@ -74,6 +75,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 | MCP handlers will reuse the current core service functions | Avoids business-rule drift between CLI and MCP | ✓ Good |
 | Target MCP transports are stdio and Streamable HTTP | Matches the current MCP spec and target clients (OpenCode/OpenWebUI) | ✓ Planned |
 | v1.1 focuses on tools, not prompts/resources/OAuth | Keeps scope tight around exposing the shipped contract first | ✓ Planned |
+| Query raw SQL mode will be read-only with server ceilings | Gives agents direct SQL without giving up database safety | ✓ Good |
 
 ## Evolution
 
@@ -93,4 +95,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after v1.1 phase 1 completion*
+*Last updated: 2026-04-08 after v1.1 phase 7 completion*

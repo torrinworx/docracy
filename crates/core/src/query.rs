@@ -546,7 +546,6 @@ mod tests {
                 direction: "desc".to_string(),
             }],
             select: vec!["id".to_string()],
-            limit: Some(1),
             cursor: Some("ignored".to_string()),
         }
         .parse()
