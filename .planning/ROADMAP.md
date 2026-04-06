@@ -98,3 +98,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 Plans:
 - [x] 05-01: Governance document type rename + persistence migration
 - [x] 05-02: Fixed repo-owned governance path + documentation refresh
+
+### Phase 6: Craft launch marketing plan
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)

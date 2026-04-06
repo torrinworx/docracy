@@ -36,7 +36,7 @@
 
 - [ ] **TST-01**: Automated tests cover MCP tool schemas, handler behavior, and error mapping without relying solely on manual client testing.
 - [ ] **TST-02**: Integration tests exercise real Postgres-backed MCP flows over at least one transport.
-- [ ] **DOC-01**: Documentation shows how to run the MCP server locally, configure OpenCode/OpenWebUI, and troubleshoot common setup issues.
+- [x] **DOC-01**: Documentation shows how to run the MCP server locally, configure OpenCode/OpenWebUI, and troubleshoot common setup issues.
 - [x] **DOC-02**: Documentation explains the interface boundary so future API/MCP work does not pull business rules out of the core.
 
 ### Governance Cleanup
