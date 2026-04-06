@@ -623,14 +623,12 @@ ORDER BY modified_at DESC
         let rows = rows
             .into_iter()
             .map(|row| match row {
-                Value::Object(row) => row,
-                other => {
-                    let mut map = Map::new();
-                    map.insert("row".to_string(), other);
-                    map
-                }
+                Value::Object(row) => Ok(row),
+                _ => Err(RepoError::Storage(
+                    "raw SQL rows must materialize as JSON objects".to_string(),
+                )),
             })
-            .collect();
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(docracy_core::query::RawQueryResult {
             rows,
