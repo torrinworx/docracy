@@ -11,6 +11,10 @@ use serde_json::{Map, Value};
 pub struct QueryInput {
     pub query: Option<String>,
 
+    pub sql: Option<String>,
+
+    pub timeout_ms: Option<u64>,
+
     #[serde(rename = "where", default)]
     pub where_: Map<String, Value>,
 
@@ -67,6 +71,32 @@ pub struct DocumentQueryResult {
     pub next_cursor: Option<DocumentQueryCursor>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct GuidedQueryInput {
+    pub query: DocumentQuery,
+    pub select: Vec<SelectField>,
+    pub applied_where: Map<String, Value>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawQueryInput {
+    pub sql: String,
+    pub limit: Option<u32>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawQueryResult {
+    pub rows: Vec<Map<String, Value>>,
+    pub total_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueryExecution {
+    Guided(GuidedQueryInput),
+    Raw(RawQueryInput),
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QueryResult {
     pub rows: Vec<Map<String, Value>>,
@@ -76,7 +106,26 @@ pub struct QueryResult {
 }
 
 impl QueryInput {
-    pub fn parse(self) -> ValidationResult<(DocumentQuery, Vec<SelectField>, Map<String, Value>)> {
+    pub fn parse(self) -> ValidationResult<QueryExecution> {
+        let QueryInput {
+            query,
+            sql,
+            timeout_ms,
+            where_,
+            order_by,
+            select,
+            limit,
+            cursor,
+        } = self;
+
+        if let Some(sql) = sql {
+            return Ok(QueryExecution::Raw(RawQueryInput {
+                sql,
+                limit,
+                timeout_ms,
+            }));
+        }
+
         // Parse where
         let mut types: Option<Vec<String>> = None;
         let mut statuses: Option<Vec<String>> = None;
@@ -87,7 +136,7 @@ impl QueryInput {
         let mut archived: Option<bool> = None;
         let mut deleted: Option<bool> = None;
 
-        for (k, v) in &self.where_ {
+        for (k, v) in &where_ {
             if k.starts_with("extensions.") {
                 return Err(ValidationError::InvalidSlug { field: "where" });
             }
@@ -128,10 +177,10 @@ impl QueryInput {
         }
 
         // Parse order_by
-        let order = if self.order_by.is_empty() {
+        let order = if order_by.is_empty() {
             DocumentQueryOrder::ModifiedDesc
-        } else if self.order_by.len() == 1 {
-            let ob = &self.order_by[0];
+        } else if order_by.len() == 1 {
+            let ob = &order_by[0];
             let dir = ob.direction.to_lowercase();
             match (ob.field.as_str(), dir.as_str()) {
                 ("modified", "desc") => DocumentQueryOrder::ModifiedDesc,
@@ -144,14 +193,13 @@ impl QueryInput {
             return Err(ValidationError::InvalidSlug { field: "order_by" });
         };
 
-        let limit = self.limit.unwrap_or(10).clamp(1, 100);
-        let cursor = match self.cursor {
+        let limit = limit.unwrap_or(10).clamp(1, 100);
+        let cursor = match cursor {
             None => None,
             Some(raw) => Some(decode_cursor(&raw)?),
         };
 
-        let mut select = self
-            .select
+        let mut select = select
             .into_iter()
             .map(|s| SelectField::parse(&s))
             .collect::<ValidationResult<Vec<_>>>()?;
@@ -165,7 +213,7 @@ impl QueryInput {
             ];
         }
 
-        let mut applied_where = self.where_;
+        let mut applied_where = where_;
         if !applied_where.contains_key("status") {
             if let Some(statuses) = &statuses {
                 applied_where.insert(
@@ -175,9 +223,9 @@ impl QueryInput {
             }
         }
 
-        Ok((
-            DocumentQuery {
-                query: self.query,
+        Ok(QueryExecution::Guided(GuidedQueryInput {
+            query: DocumentQuery {
+                query,
                 types,
                 statuses,
                 archived,
@@ -192,7 +240,7 @@ impl QueryInput {
             },
             select,
             applied_where,
-        ))
+        }))
     }
 }
 
@@ -410,7 +458,14 @@ mod tests {
 
     #[test]
     fn parse_defaults_to_active_only() {
-        let (query, _, applied_where) = QueryInput::default().parse().unwrap();
+        let QueryExecution::Guided(GuidedQueryInput {
+            query,
+            select: _,
+            applied_where,
+        }) = QueryInput::default().parse().unwrap()
+        else {
+            panic!("expected guided query execution");
+        };
 
         assert_eq!(
             query.statuses,
@@ -430,12 +485,21 @@ mod tests {
         where_.insert("archived".to_string(), Value::Bool(true));
         where_.insert("deleted".to_string(), Value::Bool(false));
 
-        let (query, _, applied_where) = QueryInput {
+        let QueryExecution::Guided(GuidedQueryInput {
+            query,
+            select: _,
+            applied_where,
+        }) = QueryInput {
+            sql: None,
+            timeout_ms: None,
             where_,
             ..Default::default()
         }
         .parse()
-        .unwrap();
+        .unwrap()
+        else {
+            panic!("expected guided query execution");
+        };
 
         assert_eq!(query.statuses, None);
         assert_eq!(query.archived, Some(true));
@@ -452,6 +516,8 @@ mod tests {
         );
 
         let err = QueryInput {
+            sql: None,
+            timeout_ms: None,
             where_,
             ..Default::default()
         }
@@ -459,6 +525,76 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(err, ValidationError::InvalidSlug { field: "where" });
+    }
+
+    #[test]
+    fn parse_prefers_raw_sql_over_guided_fields() {
+        let mut where_ = Map::new();
+        where_.insert(
+            "extensions.title".to_string(),
+            Value::String("x".to_string()),
+        );
+
+        let execution = QueryInput {
+            query: Some("needle".to_string()),
+            sql: Some("select * from documents".to_string()),
+            limit: Some(25),
+            timeout_ms: Some(2500),
+            where_,
+            order_by: vec![QueryOrderByInput {
+                field: "modified".to_string(),
+                direction: "desc".to_string(),
+            }],
+            select: vec!["id".to_string()],
+            cursor: Some("ignored".to_string()),
+        }
+        .parse()
+        .unwrap();
+
+        assert_eq!(
+            execution,
+            QueryExecution::Raw(RawQueryInput {
+                sql: "select * from documents".to_string(),
+                limit: Some(25),
+                timeout_ms: Some(2500),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_keeps_guided_behavior_without_sql() {
+        let execution = QueryInput {
+            query: Some("needle".to_string()),
+            sql: None,
+            timeout_ms: None,
+            where_: Map::new(),
+            order_by: vec![QueryOrderByInput {
+                field: "created".to_string(),
+                direction: "asc".to_string(),
+            }],
+            select: vec!["id".to_string()],
+            limit: Some(5),
+            cursor: None,
+        }
+        .parse()
+        .unwrap();
+
+        let QueryExecution::Guided(GuidedQueryInput {
+            query,
+            select,
+            applied_where,
+        }) = execution
+        else {
+            panic!("expected guided query execution");
+        };
+
+        assert_eq!(query.query, Some("needle".to_string()));
+        assert_eq!(query.order, DocumentQueryOrder::CreatedAsc);
+        assert_eq!(select, vec![SelectField::Id]);
+        assert_eq!(
+            applied_where.get("status").unwrap(),
+            &json!([DocumentStatus::ACTIVE])
+        );
     }
 
     #[test]

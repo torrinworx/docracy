@@ -15,8 +15,8 @@
 ### MCP Tool Contract
 
 - [ ] **TOOL-01**: The MCP server exposes Init/Create/Read/Query/Update as tools with machine-readable JSON schemas.
-- [ ] **TOOL-02**: MCP tool payloads stay aligned with the current CLI/core JSON semantics unless a deliberate interface-level difference is documented.
-- [ ] **TOOL-03**: MCP tool failures return stable error kinds/details suitable for automated clients.
+- [x] **TOOL-02**: MCP tool payloads stay aligned with the current CLI/core JSON semantics unless a deliberate interface-level difference is documented.
+- [x] **TOOL-03**: MCP tool failures return stable error kinds/details suitable for automated clients.
 - [ ] **TOOL-04**: Governance and constitution protections remain enforced through the same core paths already used by the CLI.
 
 ### Transports & Client Compatibility
@@ -34,7 +34,7 @@
 
 ### Testing & Documentation
 
-- [ ] **TST-01**: Automated tests cover MCP tool schemas, handler behavior, and error mapping without relying solely on manual client testing.
+- [x] **TST-01**: Automated tests cover MCP tool schemas, handler behavior, and error mapping without relying solely on manual client testing.
 - [ ] **TST-02**: Integration tests exercise real Postgres-backed MCP flows over at least one transport.
 - [x] **DOC-01**: Documentation shows how to run the MCP server locally, configure OpenCode/OpenWebUI, and troubleshoot common setup issues.
 - [x] **DOC-02**: Documentation explains the interface boundary so future API/MCP work does not pull business rules out of the core.

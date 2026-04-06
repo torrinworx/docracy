@@ -71,10 +71,25 @@ Plans:
 - [ ] 04-01: Postgres-backed MCP integration and transport smoke coverage
 - [ ] 04-02: User docs, architecture notes, and troubleshooting guide
 
+### Phase 7: Custom SQL Query Strings
+**Goal**: Rework query so agents can submit raw SQL directly through a single `sql` field, while preserving the existing guided path as the fallback.
+**Depends on**: Phase 4
+**Requirements**: TOOL-02, TOOL-03, TST-01, DOC-01
+**Success Criteria** (what must be TRUE):
+  1. Query accepts either `sql` or guided parameters, with `sql` taking precedence when present.
+  2. SQL mode is read-only only and runs against the raw database tables.
+  3. Timeout and row limit are caller-requested but enforced with server-side ceilings.
+  4. The query contract is documented clearly enough for agents to author SQL directly.
+**Plans**: 2 plans
+
+Plans:
+- [x] 07-01: Query input contract + guided/raw mode routing
+- [x] 07-02: Raw SQL execution, ceilings, docs, and integration coverage
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -83,6 +98,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. Streamable HTTP + Client Compatibility | 0/2 | Planned | - |
 | 4. Verification + Documentation Hardening | 0/2 | Planned | - |
 | 5. Governance Model Cleanup | 2/2 | Complete   | 2026-04-06 |
+| 6. Craft launch marketing plan | 1/1 | Complete | 2026-04-06 |
+| 7. Custom SQL Query Strings | 0/2 | Planned | - |
 
 ## Archived Milestones
 

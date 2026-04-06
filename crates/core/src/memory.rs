@@ -67,7 +67,7 @@ impl MemoryRepository {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl Repository for MemoryRepository {
     async fn create_document_with_revision(
         &mut self,

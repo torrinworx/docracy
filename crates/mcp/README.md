@@ -57,7 +57,19 @@ Output:
 
 ### `query`
 
-Input (matches `docracy_core::query::QueryInput`):
+Input: `docracy_core::query::QueryInput`
+
+```json
+{
+  "sql": "SELECT id, \"type\", status FROM documents",
+  "limit": 50,
+  "timeout_ms": 5000
+}
+```
+
+If `sql` is present, it takes precedence over `query`/`where`/`order_by`/`select`. Raw SQL runs read-only and is clamped to 100 rows and 5000ms.
+
+Guided fallback example:
 
 ```json
 {
