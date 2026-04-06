@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
-status: in_progress
-stopped_at: Completed 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions
-last_updated: "2026-04-06T19:48:18Z"
+status: unknown
+stopped_at: Completed 06-craft-launch-marketing-plan-PLAN.md
+last_updated: "2026-04-06T20:01:40.296Z"
 progress:
-  total_phases: 8
+  total_phases: 9
   completed_phases: 8
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 14
+  completed_plans: 14
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 5 — governance cleanup
+**Current focus:** Phase 06 — craft-launch-marketing-plan
 
 ## Current Position
 
-Phase: 5 (governance cleanup) — COMPLETE
-Plan: 2 of 2
+Phase: 06 (craft-launch-marketing-plan) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -59,6 +59,7 @@ Plan: 2 of 2
 | Phase 01-mcp-crate-interface-boundary P02 | 4 min | 3 tasks | 6 files |
 | Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P01 | 5m | 2 tasks | 9 files |
 | Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P02 | 5m | 2 tasks | 7 files |
+| Phase 06-craft-launch-marketing-plan P01 | 8 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -96,6 +97,8 @@ Recent decisions affecting current work:
 - [Phase 01-mcp-crate-interface-boundary]: Own runtime/config in docracy-mcp; delegate business rules to docracy-core use-cases
 - [Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions]: Model the repo-owned instructions document as governance everywhere in core while preserving the on-disk bundle layout.
 - [Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions]: Lock CLI and MCP startup to a fixed repo-owned ./governance bundle helper instead of passing a path override through startup config.
+- [Phase 06-craft-launch-marketing-plan]: Position Docracy as durable, versioned document storage for agents instead of a generic notes app or vector database.
+- [Phase 06-craft-launch-marketing-plan]: Lead launch messaging with Postgres-backed document storage, revision history, and repo-owned governance.
 
 ### Milestone Setup
 
@@ -107,6 +110,7 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - Phase 5 added: Clean up governance model: make all governance docs type=governance, remove constitution special-case, and ensure Docracy always resolves ./governance as repo-owned instructions.
+- Phase 6 added: Craft launch marketing plan.
 
 ### Pending Todos
 
@@ -125,6 +129,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-06T19:48:18.070Z
-Stopped at: Completed 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions
+Last session: 2026-04-06T20:01:40.292Z
+Stopped at: Completed 06-craft-launch-marketing-plan-PLAN.md
 Resume file: None
