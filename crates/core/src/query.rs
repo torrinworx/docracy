@@ -523,6 +523,75 @@ mod tests {
     }
 
     #[test]
+    fn parse_prefers_raw_sql_over_guided_fields() {
+        let mut where_ = Map::new();
+        where_.insert(
+            "extensions.title".to_string(),
+            Value::String("x".to_string()),
+        );
+
+        let execution = QueryInput {
+            query: Some("needle".to_string()),
+            sql: Some("select * from documents".to_string()),
+            timeout_ms: Some(2500),
+            where_,
+            order_by: vec![QueryOrderByInput {
+                field: "modified".to_string(),
+                direction: "desc".to_string(),
+            }],
+            select: vec!["id".to_string()],
+            limit: Some(1),
+            cursor: Some("ignored".to_string()),
+        }
+        .parse()
+        .unwrap();
+
+        assert_eq!(
+            execution,
+            QueryExecution::Raw(RawQueryInput {
+                sql: "select * from documents".to_string(),
+                timeout_ms: Some(2500),
+            })
+        );
+    }
+
+    #[test]
+    fn parse_keeps_guided_behavior_without_sql() {
+        let execution = QueryInput {
+            query: Some("needle".to_string()),
+            sql: None,
+            timeout_ms: None,
+            where_: Map::new(),
+            order_by: vec![QueryOrderByInput {
+                field: "created".to_string(),
+                direction: "asc".to_string(),
+            }],
+            select: vec!["id".to_string()],
+            limit: Some(5),
+            cursor: None,
+        }
+        .parse()
+        .unwrap();
+
+        let QueryExecution::Guided(GuidedQueryInput {
+            query,
+            select,
+            applied_where,
+        }) = execution
+        else {
+            panic!("expected guided query execution");
+        };
+
+        assert_eq!(query.query, Some("needle".to_string()));
+        assert_eq!(query.order, DocumentQueryOrder::CreatedAsc);
+        assert_eq!(select, vec![SelectField::Id]);
+        assert_eq!(
+            applied_where.get("status").unwrap(),
+            &json!([DocumentStatus::ACTIVE])
+        );
+    }
+
+    #[test]
     fn cursor_round_trips_and_projection_is_stable() {
         let cursor = DocumentQueryCursor {
             ts: Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap(),
