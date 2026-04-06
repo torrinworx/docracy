@@ -1,0 +1,17 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"mcp": {
+		"test-test-test": {
+			"type": "local",
+			"enabled": true,
+			"command": [
+				"bash",
+				"-lc",
+				"cd /home/torrin/Data/Repos/Personal/docracy && exec /home/torrin/Data/Repos/Personal/docracy/target/debug/docracy-mcp"
+			],
+			"environment": {
+				"DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy"
+			}
+		}
+	}
+}
