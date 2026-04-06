@@ -1,5 +1,13 @@
+<!-- General Instructions -->
+Run the following command in the console when you have finalized your response to the user to notify them:
+```bash
+notify-send "OpenCode Agent" "<message>"
+```
+Only send this after a long running context without their input like multi agent workflows or large processes running in the Build mode.
+
 <!-- DOCRACY -->
-Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
+Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.
+
 
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
