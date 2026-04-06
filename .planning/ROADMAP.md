@@ -84,7 +84,7 @@ Plans:
 
 Plans:
 - [x] 07-01: Query input contract + guided/raw mode routing
-- [ ] 07-02: Raw SQL execution, ceilings, docs, and integration coverage
+- [x] 07-02: Raw SQL execution, ceilings, docs, and integration coverage
 
 ## Progress
 

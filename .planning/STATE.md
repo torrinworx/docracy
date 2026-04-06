@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-04-08T15:06:22.167Z"
+stopped_at: Completed 07-02-PLAN.md
+last_updated: "2026-04-08T15:13:02.330Z"
 progress:
   total_phases: 10
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 15
-  completed_plans: 15
+  completed_plans: 16
 ---
 
 # Project State
@@ -61,6 +61,7 @@ Plan: 2 of 2
 | Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P02 | 5m | 2 tasks | 7 files |
 | Phase 06-craft-launch-marketing-plan P01 | 8 min | 1 tasks | 1 files |
 | Phase 07-custom-sql-query-strings P01 | 10 min | 3 tasks | 9 files |
+| Phase 07-custom-sql-query-strings P02 | 6 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,9 @@ Recent decisions affecting current work:
 - [Phase 07-custom-sql-query-strings]: Use a typed QueryExecution enum so raw SQL and guided parsing stay explicit at the core boundary.
 - [Phase 07-custom-sql-query-strings]: Default repository raw-query support returns an unsupported-storage error unless an adapter overrides it.
 - [Phase 07-custom-sql-query-strings]: Relax async-trait futures to ?Send for repository object safety across the core and adapters.
+- [Phase 07-custom-sql-query-strings]: Raw SQL takes precedence over guided query fields when `sql` is present.
+- [Phase 07-custom-sql-query-strings]: Raw SQL runs inside a read-only transaction and uses server-enforced ceilings of 100 rows and 5000ms.
+- [Phase 07-custom-sql-query-strings]: Raw rows are returned as JSON maps so the adapter never guesses column types.
 
 ### Milestone Setup
 
@@ -135,6 +139,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-08T15:06:22.164Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-04-08T15:13:02.326Z
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
