@@ -225,6 +225,8 @@ impl QueryArgs {
     fn into_core(self) -> docracy_core::query::QueryInput {
         docracy_core::query::QueryInput {
             query: self.query,
+            sql: None,
+            timeout_ms: None,
             where_: self.where_.into_iter().collect(),
             order_by: self
                 .order_by

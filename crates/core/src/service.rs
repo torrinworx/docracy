@@ -2,7 +2,9 @@ use crate::document::{Document, DocumentStatus, NewDocument};
 use crate::errors::CoreError;
 use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
-use crate::query::{encode_cursor, project_rows, QueryInput, QueryResult};
+use crate::query::{
+    encode_cursor, project_rows, GuidedQueryInput, QueryExecution, QueryInput, QueryResult,
+};
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
 use crate::validation::ValidationError;
@@ -124,17 +126,34 @@ pub async fn query_documents(
     repo: &dyn Repository,
     input: QueryInput,
 ) -> Result<QueryResult, CoreError> {
-    let (query, select, applied_where) = input.parse()?;
-    let out = repo.query_documents(query).await?;
-    let rows = project_rows(&out.documents, &select);
-    let next_cursor = out.next_cursor.as_ref().map(encode_cursor);
+    match input.parse()? {
+        QueryExecution::Guided(GuidedQueryInput {
+            query,
+            select,
+            applied_where,
+        }) => {
+            let out = repo.query_documents(query).await?;
+            let rows = project_rows(&out.documents, &select);
+            let next_cursor = out.next_cursor.as_ref().map(encode_cursor);
 
-    Ok(QueryResult {
-        rows,
-        total_count: out.total_count,
-        applied_where,
-        next_cursor,
-    })
+            Ok(QueryResult {
+                rows,
+                total_count: out.total_count,
+                applied_where,
+                next_cursor,
+            })
+        }
+        QueryExecution::Raw(raw) => {
+            let out = repo.query_raw_documents(raw).await?;
+
+            Ok(QueryResult {
+                rows: out.rows,
+                total_count: out.total_count,
+                applied_where: Map::new(),
+                next_cursor: None,
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -394,6 +413,7 @@ async fn reconcile_governance(
 mod tests {
     use super::*;
     use crate::memory::MemoryRepository;
+    use crate::query::{DocumentQuery, DocumentQueryResult, RawQueryInput, RawQueryResult};
     use crate::repository::Repository;
     use crate::DocumentType;
     use crate::QueryInput;
@@ -492,6 +512,98 @@ mod tests {
                 extensions: Extensions::new(),
             };
             (document, revision)
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingRawRepository {
+        raw_calls: std::cell::Cell<u32>,
+        guided_calls: std::cell::Cell<u32>,
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl Repository for RecordingRawRepository {
+        async fn create_document_with_revision(
+            &mut self,
+            _doc: Document,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_document_with_revisions(
+            &mut self,
+            _doc: Document,
+            _expected_head: RevisionId,
+            _superseded: DocumentRevision,
+            _new_rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_document(&mut self, _doc: Document) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_document(
+            &self,
+            _id: DocumentId,
+        ) -> Result<Option<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_documents(
+            &self,
+            _ids: &[DocumentId],
+        ) -> Result<Vec<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn find_latest_document_by_type(
+            &self,
+            _doc_type: &str,
+        ) -> Result<Option<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn insert_revision(&mut self, _rev: DocumentRevision) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_revision(&mut self, _rev: DocumentRevision) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_revision(
+            &self,
+            _id: RevisionId,
+        ) -> Result<Option<DocumentRevision>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn list_active_context_documents(
+            &self,
+        ) -> Result<Vec<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn query_documents(
+            &self,
+            _query: DocumentQuery,
+        ) -> Result<DocumentQueryResult, crate::errors::RepoError> {
+            self.guided_calls.set(self.guided_calls.get() + 1);
+            panic!("guided query should not be called in raw mode")
+        }
+
+        async fn query_raw_documents(
+            &self,
+            _query: RawQueryInput,
+        ) -> Result<RawQueryResult, crate::errors::RepoError> {
+            self.raw_calls.set(self.raw_calls.get() + 1);
+            Ok(RawQueryResult {
+                rows: vec![Map::from_iter([(String::from("id"), json!("raw-1"))])],
+                total_count: 1,
+            })
         }
     }
 
@@ -777,6 +889,8 @@ mod tests {
             &repo,
             QueryInput {
                 query: None,
+                sql: None,
+                timeout_ms: None,
                 where_: Map::new(),
                 order_by: vec![],
                 select: vec!["id".to_string()],
@@ -800,6 +914,8 @@ mod tests {
             &repo,
             QueryInput {
                 query: None,
+                sql: None,
+                timeout_ms: None,
                 where_,
                 order_by: vec![],
                 select: vec!["id".to_string()],
@@ -815,5 +931,33 @@ mod tests {
             .map(|r| r.get("id").unwrap().as_str().unwrap().to_string())
             .collect();
         assert_eq!(ids, vec![d2.document.id.to_string()]);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn query_routes_raw_requests_to_raw_repository_path() {
+        let repo = RecordingRawRepository::default();
+
+        let out = query_documents(
+            &repo,
+            QueryInput {
+                query: Some("needle".to_string()),
+                sql: Some("select id from documents".to_string()),
+                timeout_ms: Some(1_500),
+                where_: Map::from_iter([(String::from("extensions.title"), json!("x"))]),
+                order_by: vec![],
+                select: vec!["id".to_string()],
+                limit: Some(10),
+                cursor: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(repo.raw_calls.get(), 1);
+        assert_eq!(repo.guided_calls.get(), 0);
+        assert_eq!(out.total_count, 1);
+        assert_eq!(out.applied_where, Map::new());
+        assert_eq!(out.next_cursor, None);
+        assert_eq!(out.rows[0].get("id"), Some(&json!("raw-1")));
     }
 }

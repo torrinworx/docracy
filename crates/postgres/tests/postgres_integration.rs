@@ -234,6 +234,8 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         &repo,
         QueryInput {
             query: Some("hello".to_string()),
+            sql: None,
+            timeout_ms: None,
             where_: Map::new(),
             order_by: vec![],
             select: vec!["id".to_string()],
@@ -271,6 +273,8 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         &repo,
         QueryInput {
             query: None,
+            sql: None,
+            timeout_ms: None,
             where_,
             order_by: vec![],
             select: vec!["id".to_string(), "status".to_string()],
