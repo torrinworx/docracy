@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 06-craft-launch-marketing-plan-PLAN.md
-last_updated: "2026-04-06T20:01:40.296Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-04-08T15:06:22.167Z"
 progress:
-  total_phases: 9
-  completed_phases: 8
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 10
+  completed_phases: 7
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 06 — craft-launch-marketing-plan
+**Current focus:** Phase 07 — custom-sql-query-strings
 
 ## Current Position
 
-Phase: 06 (craft-launch-marketing-plan) — EXECUTING
-Plan: 1 of 1
+Phase: 07 (custom-sql-query-strings) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Plan: 1 of 1
 | Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P01 | 5m | 2 tasks | 9 files |
 | Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions P02 | 5m | 2 tasks | 7 files |
 | Phase 06-craft-launch-marketing-plan P01 | 8 min | 1 tasks | 1 files |
+| Phase 07-custom-sql-query-strings P01 | 10 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,9 @@ Recent decisions affecting current work:
 - [Phase 05-clean-up-governance-model-make-all-governance-docs-type-governance-remove-constitution-special-case-and-ensure-docracy-always-resolves-governance-as-repo-owned-instructions]: Lock CLI and MCP startup to a fixed repo-owned ./governance bundle helper instead of passing a path override through startup config.
 - [Phase 06-craft-launch-marketing-plan]: Position Docracy as durable, versioned document storage for agents instead of a generic notes app or vector database.
 - [Phase 06-craft-launch-marketing-plan]: Lead launch messaging with Postgres-backed document storage, revision history, and repo-owned governance.
+- [Phase 07-custom-sql-query-strings]: Use a typed QueryExecution enum so raw SQL and guided parsing stay explicit at the core boundary.
+- [Phase 07-custom-sql-query-strings]: Default repository raw-query support returns an unsupported-storage error unless an adapter overrides it.
+- [Phase 07-custom-sql-query-strings]: Relax async-trait futures to ?Send for repository object safety across the core and adapters.
 
 ### Milestone Setup
 
@@ -111,6 +115,8 @@ Recent decisions affecting current work:
 
 - Phase 5 added: Clean up governance model: make all governance docs type=governance, remove constitution special-case, and ensure Docracy always resolves ./governance as repo-owned instructions.
 - Phase 6 added: Craft launch marketing plan.
+- Phase 7 added: Custom SQL Query Strings.
+- Phase 7 refined: single `sql` field, guided fallback, read-only raw-table execution, and server-enforced timeout/row ceilings.
 
 ### Pending Todos
 
@@ -129,6 +135,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-06T20:01:40.292Z
-Stopped at: Completed 06-craft-launch-marketing-plan-PLAN.md
+Last session: 2026-04-08T15:06:22.164Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None

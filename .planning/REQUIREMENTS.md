@@ -15,8 +15,8 @@
 ### MCP Tool Contract
 
 - [ ] **TOOL-01**: The MCP server exposes Init/Create/Read/Query/Update as tools with machine-readable JSON schemas.
-- [ ] **TOOL-02**: MCP tool payloads stay aligned with the current CLI/core JSON semantics unless a deliberate interface-level difference is documented.
-- [ ] **TOOL-03**: MCP tool failures return stable error kinds/details suitable for automated clients.
+- [x] **TOOL-02**: MCP tool payloads stay aligned with the current CLI/core JSON semantics unless a deliberate interface-level difference is documented.
+- [x] **TOOL-03**: MCP tool failures return stable error kinds/details suitable for automated clients.
 - [ ] **TOOL-04**: Governance and constitution protections remain enforced through the same core paths already used by the CLI.
 
 ### Transports & Client Compatibility
