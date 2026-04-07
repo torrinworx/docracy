@@ -2,6 +2,16 @@
 
 This crate exposes the shipped Docracy contract (Init/Create/Read/Query/Update) over MCP.
 
+## Workspace Binding
+
+The MCP server can run in either shared/global mode or workspace-bound mode.
+
+- If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full lifetime of the MCP session.
+- If `WORKSPACE_ID` is omitted, the server stays in the shared/global path.
+- Project-scoped OpenCode config should provide `WORKSPACE_ID` from client environment (for example `DOCRACY_WORKSPACE_ID`), not by inferring identity from the repository path.
+- Shared/global governance remains readable in both modes; workspace-scoped sessions see their workspace plus the shared governance rows.
+- Startup still uses the fixed repo-owned `./governance` bundle.
+
 ## Tools
 
 Tool names are stable:
@@ -110,6 +120,7 @@ Output:
 
 - The tool inputs/outputs intentionally mirror the CLI JSON contract.
 - `init` is a tool call, but server startup configuration (database URL, fixed repo-owned `./governance` bundle, migration policy) is handled at process startup rather than via tool parameters.
+- Workspace binding is also handled at process startup through `WORKSPACE_ID`, so client config can select a tenant without adding a tool argument.
 
 ## Error Contract
 
