@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 07-02-PLAN.md
-last_updated: "2026-04-08T15:20:02.419Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-04-08T20:31:10.345Z"
 progress:
-  total_phases: 10
+  total_phases: 11
   completed_phases: 8
-  total_plans: 15
-  completed_plans: 16
+  total_plans: 17
+  completed_plans: 17
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 07 — custom-sql-query-strings
+**Current focus:** Phase 8 — workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation
 
 ## Current Position
 
-Phase: 07
-Plan: Not started
+Phase: 8 (workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -62,6 +62,7 @@ Plan: Not started
 | Phase 06-craft-launch-marketing-plan P01 | 8 min | 1 tasks | 1 files |
 | Phase 07-custom-sql-query-strings P01 | 10 min | 3 tasks | 9 files |
 | Phase 07-custom-sql-query-strings P02 | 6 min | 3 tasks | 5 files |
+| Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P01 | 20 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,9 @@ Recent decisions affecting current work:
 - [Phase 07-custom-sql-query-strings]: Raw SQL takes precedence over guided query fields when `sql` is present.
 - [Phase 07-custom-sql-query-strings]: Raw SQL runs inside a read-only transaction and uses server-enforced ceilings of 100 rows and 5000ms.
 - [Phase 07-custom-sql-query-strings]: Raw rows are returned as JSON maps so the adapter never guesses column types.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Use a reserved global workspace row and shared fallback for unbound sessions so governance stays readable.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Bind workspace identity with PgPool after_connect set_config('docracy.workspace_id', ...) on each pooled connection.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Enforce workspace-consistent document/revision lineage with composite foreign keys and RLS forced on both tables.
 
 ### Milestone Setup
 
@@ -121,6 +125,7 @@ Recent decisions affecting current work:
 - Phase 6 added: Craft launch marketing plan.
 - Phase 7 added: Custom SQL Query Strings.
 - Phase 7 refined: single `sql` field, guided fallback, read-only raw-table execution, and server-enforced timeout/row ceilings.
+- Phase 8 added: Workspace tenancy with generated workspace IDs, explicit MCP session binding through project-scoped client config, and Postgres RLS isolation.
 
 ### Pending Todos
 
@@ -131,7 +136,6 @@ Recent decisions affecting current work:
 - Craft launch marketing plan
 - Add MCP server to local opencode
 - Make governance path repo-defined in opencode config
-- Scope Docracy by workspace
 
 ### Blockers/Concerns
 
@@ -139,6 +143,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-08T15:13:02.326Z
-Stopped at: Completed 07-02-PLAN.md
+Last session: 2026-04-08T20:31:10.342Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
