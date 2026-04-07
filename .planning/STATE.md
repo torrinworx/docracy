@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-04-08T20:40:00.193Z"
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-04-08T22:40:24.711Z"
 progress:
-  total_phases: 11
-  completed_phases: 9
-  total_plans: 17
-  completed_plans: 18
+  total_phases: 12
+  completed_phases: 10
+  total_plans: 18
+  completed_plans: 19
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 8 — workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation
+**Current focus:** Phase 09 — cli-workspace-create-command
 
 ## Current Position
 
-Phase: 8
-Plan: Not started
+Phase: 09 (cli-workspace-create-command) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Plan: Not started
 | Phase 07-custom-sql-query-strings P02 | 6 min | 3 tasks | 5 files |
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P01 | 20 min | 2 tasks | 4 files |
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P02 | 35 min | 3 tasks | 8 files |
+| Phase 09-cli-workspace-create-command P01 | 59 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,9 @@ Recent decisions affecting current work:
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Bind tenant scope from WORKSPACE_ID at process startup and keep missing values on the shared/global fallback path.
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Store the bound workspace on McpRuntime so the process lifetime retains the session scope alongside the scoped repository.
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Use project-scoped OpenCode env substitution instead of repository-path heuristics for client selection.
+- [Phase 09-cli-workspace-create-command]: Keep workspace provisioning CLI-only and return the created UUID as JSON on stdout
+- [Phase 09-cli-workspace-create-command]: Reject malformed and nil workspace IDs before connecting to Postgres so invalid input fails fast with structured validation errors
+- [Phase 09-cli-workspace-create-command]: Persist workspaces through PgRepository instead of embedding raw SQL in the CLI
 
 ### Milestone Setup
 
@@ -148,6 +152,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-08T20:36:41.865Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-04-08T22:40:24.709Z
+Stopped at: Completed 09-01-PLAN.md
 Resume file: None

@@ -32,6 +32,12 @@
 - [ ] **CFG-02**: HTTP mode binds `127.0.0.1` by default and documents origin/auth expectations for non-local deployments.
 - [ ] **CFG-03**: Transport-safe logging/output rules are preserved: stdio stdout is reserved for MCP messages, and logs go to stderr/tracing sinks.
 
+### Workspace Lifecycle
+
+- [x] **WS-05**: Operators can create a workspace row through the CLI and receive a UUID for later `WORKSPACE_ID` binding.
+- [x] **WS-06**: Workspace creation uses a generated UUID by default, accepts an explicit UUID for scripted provisioning, and keeps the reserved nil UUID mapped to the shared global workspace only.
+- [x] **WS-07**: Workspace provisioning stays CLI-only; the MCP tool surface remains `Init/Create/Read/Query/Update` and does not gain workspace management tools.
+
 ### Testing & Documentation
 
 - [x] **TST-01**: Automated tests cover MCP tool schemas, handler behavior, and error mapping without relying solely on manual client testing.
@@ -76,6 +82,9 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | CFG-01 | Phase 1 | Complete |
 | CFG-02 | Phase 3 | Planned |
 | CFG-03 | Phase 2 | Planned |
+| WS-05 | Phase 9 | Planned |
+| WS-06 | Phase 9 | Planned |
+| WS-07 | Phase 9 | Planned |
 | TST-01 | Phase 2 | Planned |
 | TST-02 | Phase 4 | Planned |
 | DOC-01 | Phase 4 | Planned |
@@ -86,8 +95,8 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | DOC-03 | Phase 5 | Planned |
 
 **Coverage:**
-- v1.1 requirements: 22 total
-- Mapped to phases: 22
+- v1.1 requirements: 25 total
+- Mapped to phases: 25
 - Unmapped: 0
 
 ---
