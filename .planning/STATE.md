@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-04-08T20:31:10.345Z"
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-04-08T20:37:12.937Z"
 progress:
   total_phases: 11
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 17
-  completed_plans: 17
+  completed_plans: 18
 ---
 
 # Project State
@@ -63,6 +63,7 @@ Plan: 2 of 2
 | Phase 07-custom-sql-query-strings P01 | 10 min | 3 tasks | 9 files |
 | Phase 07-custom-sql-query-strings P02 | 6 min | 3 tasks | 5 files |
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P01 | 20 min | 2 tasks | 4 files |
+| Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P02 | 35 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -111,6 +112,9 @@ Recent decisions affecting current work:
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Use a reserved global workspace row and shared fallback for unbound sessions so governance stays readable.
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Bind workspace identity with PgPool after_connect set_config('docracy.workspace_id', ...) on each pooled connection.
 - [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Enforce workspace-consistent document/revision lineage with composite foreign keys and RLS forced on both tables.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Bind tenant scope from WORKSPACE_ID at process startup and keep missing values on the shared/global fallback path.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Store the bound workspace on McpRuntime so the process lifetime retains the session scope alongside the scoped repository.
+- [Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation]: Use project-scoped OpenCode env substitution instead of repository-path heuristics for client selection.
 
 ### Milestone Setup
 
@@ -140,9 +144,10 @@ Recent decisions affecting current work:
 ### Blockers/Concerns
 
 - `gsd-tools` phase lookup currently resolves `01` to the archived v1.0 phase directory, so future `/gsd-* phase 1` commands need a milestone-aware fix or manual path awareness.
+- Plan-local requirement IDs WS-02 and WS-04 were not present in .planning/REQUIREMENTS.md, so automatic requirement marking skipped.
 
 ## Session Continuity
 
-Last session: 2026-04-08T20:31:10.342Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-04-08T20:36:41.865Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None

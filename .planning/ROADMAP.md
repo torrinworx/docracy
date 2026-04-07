@@ -136,4 +136,4 @@ Plans:
 
 Plans:
 - [x] 08-01: Workspace schema, RLS policies, and scope-aware Postgres harness
-- [ ] 08-02: MCP workspace binding, project config env wiring, and operator docs
+- [x] 08-02: MCP workspace binding, project config env wiring, and operator docs
