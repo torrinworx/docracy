@@ -148,6 +148,13 @@ async fn main() {
 
 async fn run() -> Result<()> {
     let cli = Cli::parse();
+    let workspace_create_id = match &cli.command {
+        Command::Workspace {
+            command: WorkspaceCommand::Create { workspace_id },
+        } => Some(resolve_workspace_id(workspace_id.as_deref())?),
+        _ => None,
+    };
+
     let database_url = cli
         .database_url
         .or_else(|| std::env::var("DATABASE_URL").ok())
@@ -167,8 +174,8 @@ async fn run() -> Result<()> {
         Command::Migrate => json!({"ok": true}),
 
         Command::Workspace { command } => match command {
-            WorkspaceCommand::Create { workspace_id } => {
-                let workspace_id = resolve_workspace_id(workspace_id.as_deref())?;
+            WorkspaceCommand::Create { .. } => {
+                let workspace_id = workspace_create_id.expect("workspace id prevalidated");
                 repo.create_workspace(workspace_id).await?;
 
                 json!({"workspace_id": workspace_id.to_string()})

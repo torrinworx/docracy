@@ -1,0 +1,6 @@
+{
+  "error": {
+    "kind": "validation_error",
+    "message": "workspace_id must be a UUID: not-a-uuid"
+  }
+}

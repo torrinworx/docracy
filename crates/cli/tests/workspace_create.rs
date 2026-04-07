@@ -67,10 +67,6 @@ fn workspace_create_accepts_an_explicit_uuid() {
 
 #[test]
 fn workspace_create_rejects_nil_uuid() {
-    let Some(_) = database_url() else {
-        return;
-    };
-
     let assert = workspace_create_command()
         .args([
             "workspace",

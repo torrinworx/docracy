@@ -127,6 +127,15 @@ async fn workspace_id_for_document(repo: &PgRepository, id: docracy_core::Docume
         .unwrap()
 }
 
+async fn workspace_exists(repo: &PgRepository, workspace_id: Uuid) -> bool {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM workspaces WHERE id = $1")
+        .bind(workspace_id)
+        .fetch_optional(repo.pool())
+        .await
+        .unwrap()
+        .is_some()
+}
+
 async fn seed_documents(repo: &PgRepository, count: i32) {
     sqlx::query(
         r#"
@@ -628,4 +637,19 @@ async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
         .unwrap()
         .unwrap();
     assert_eq!(global_gov.id, scoped_gov.id);
+}
+
+#[tokio::test]
+async fn create_workspace_inserts_workspace_row() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let (repo, _schema_guard) = isolated_repo(&url).await;
+    repo.migrate().await.unwrap();
+
+    let workspace_id = Uuid::new_v4();
+    repo.create_workspace(workspace_id).await.unwrap();
+
+    assert!(workspace_exists(&repo, workspace_id).await);
 }

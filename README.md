@@ -27,6 +27,13 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 - **Update**, allows agents to update and append findings to existing documents, including rewriting them. This stores revision history and requires `expected_revision` so stale writes fail instead of overwriting.
 - **CLI contract**, commands return JSON on stdout, commands that take payloads read JSON on stdin or from an input file, failures emit structured JSON on stderr and exit non-zero.
 
+### Workspace bootstrap
+
+- Run `docracy workspace create` to provision a workspace row and receive a JSON `workspace_id`.
+- Pass `--workspace-id <uuid>` when you need scripted or repeatable provisioning.
+- Export the returned UUID into `WORKSPACE_ID` before starting MCP sessions.
+- Workspace management stays CLI-only; the MCP server still exposes only Init/Create/Read/Query/Update.
+
 ### Future ideas
 
 - **Retrieval helper / smart context loading**, somehow send the entire chat history into this as a parameter. Vector search runs, top results, and the full files of some filtered set of results are appended to the context. List IDs and short blurbs about other results not included. Ensure high relevance to the user message/context history.
