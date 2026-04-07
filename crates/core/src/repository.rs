@@ -45,7 +45,10 @@ pub trait Repository {
     async fn query_documents(&self, query: DocumentQuery)
         -> Result<DocumentQueryResult, RepoError>;
 
-    async fn query_raw_documents(&self, _query: RawQueryInput) -> Result<RawQueryResult, RepoError> {
+    async fn query_raw_documents(
+        &self,
+        _query: RawQueryInput,
+    ) -> Result<RawQueryResult, RepoError> {
         Err(RepoError::Storage(
             "raw SQL query execution is not supported by this repository".to_string(),
         ))

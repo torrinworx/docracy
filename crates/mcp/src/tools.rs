@@ -38,8 +38,10 @@ impl DocracyMcpServer {
 
     async fn runtime_mut(
         &self,
-    ) -> Result<tokio::sync::MutexGuard<'_, Option<crate::runtime::McpRuntime>>, rmcp::model::ErrorData>
-    {
+    ) -> Result<
+        tokio::sync::MutexGuard<'_, Option<crate::runtime::McpRuntime>>,
+        rmcp::model::ErrorData,
+    > {
         Ok(self.runtime.lock().await)
     }
 
@@ -85,17 +87,18 @@ impl DocracyMcpServer {
         &self,
         Parameters(args): Parameters<CreateArgs>,
     ) -> Result<Content, rmcp::model::ErrorData> {
-        let doc_type = docracy_core::document::DocumentType::new(args.doc_type)
-            .map_err(|e| McpError::new(McpErrorKind::ValidationError, e.to_string()).to_error_data())?;
+        let doc_type = docracy_core::document::DocumentType::new(args.doc_type).map_err(|e| {
+            McpError::new(McpErrorKind::ValidationError, e.to_string()).to_error_data()
+        })?;
 
         let input = docracy_core::NewDocument {
             doc_type,
             content: object_to_value(args.content),
             extensions: args.extensions.into_iter().collect(),
         };
-        input
-            .validate()
-            .map_err(|e| McpError::new(McpErrorKind::ValidationError, e.to_string()).to_error_data())?;
+        input.validate().map_err(|e| {
+            McpError::new(McpErrorKind::ValidationError, e.to_string()).to_error_data()
+        })?;
 
         let mut guard = self.runtime_mut().await?;
         let runtime = guard.as_mut().ok_or_else(Self::runtime_missing)?;
@@ -256,7 +259,9 @@ pub struct UpdateArgs {
 }
 
 impl UpdateArgs {
-    fn into_core(self) -> Result<docracy_core::service::UpdateDocumentInput, rmcp::model::ErrorData> {
+    fn into_core(
+        self,
+    ) -> Result<docracy_core::service::UpdateDocumentInput, rmcp::model::ErrorData> {
         let id = parse_document_id(&self.id)?;
         let expected_head = parse_revision_id(&self.expected_revision)?;
 
@@ -277,16 +282,22 @@ fn object_to_value(map: BTreeMap<String, Value>) -> Value {
 fn parse_document_id(input: &str) -> Result<docracy_core::ids::DocumentId, rmcp::model::ErrorData> {
     serde_json::from_value::<docracy_core::ids::DocumentId>(Value::String(input.to_string()))
         .map_err(|_| {
-            McpError::new(McpErrorKind::ValidationError, format!("invalid uuid: {input}"))
-                .to_error_data()
+            McpError::new(
+                McpErrorKind::ValidationError,
+                format!("invalid uuid: {input}"),
+            )
+            .to_error_data()
         })
 }
 
 fn parse_revision_id(input: &str) -> Result<docracy_core::ids::RevisionId, rmcp::model::ErrorData> {
     serde_json::from_value::<docracy_core::ids::RevisionId>(Value::String(input.to_string()))
         .map_err(|_| {
-            McpError::new(McpErrorKind::ValidationError, format!("invalid uuid: {input}"))
-                .to_error_data()
+            McpError::new(
+                McpErrorKind::ValidationError,
+                format!("invalid uuid: {input}"),
+            )
+            .to_error_data()
         })
 }
 

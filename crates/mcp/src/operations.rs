@@ -9,12 +9,12 @@ use crate::runtime::McpRuntime;
 use docracy_core::ids::DocumentId;
 use docracy_core::query::{QueryInput, QueryResult};
 use docracy_core::repository::Repository;
+use docracy_core::service::{Clock, IdGenerator};
 use docracy_core::service::{
     CreateDocumentResult, InitBundleResult, ReadDocumentsResult, UpdateDocumentInput,
     UpdateDocumentResult,
 };
-use docracy_core::{NewDocument, GovernanceSource};
-use docracy_core::service::{Clock, IdGenerator};
+use docracy_core::{GovernanceSource, NewDocument};
 
 /// Initialize the governance bundle and ensure required seed state exists.
 pub async fn init_bundle(

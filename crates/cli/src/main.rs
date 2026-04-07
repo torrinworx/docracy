@@ -53,8 +53,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Load governance docs + active context docs. Bootstraps the repo-owned governance doc if missing.
-    Init {
-    },
+    Init {},
 
     /// Create a document (JSON input)
     Create {

@@ -1,11 +1,11 @@
 use docracy_core::document::{DocumentStatus, DocumentType, NewDocument};
+use docracy_core::query::RawQueryInput;
 use docracy_core::repository::Repository;
 use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{
     create_document, init_bundle, query_documents, update_document, FsGovernanceSource, QueryInput,
     UpdateDocumentInput,
 };
-use docracy_core::query::RawQueryInput;
 use docracy_postgres::PgRepository;
 use serde_json::json;
 use serde_json::Map;
@@ -61,7 +61,10 @@ async fn isolated_repo(url: &str) -> (PgRepository, SchemaGuard) {
     isolated_repo_scoped(url, None).await
 }
 
-async fn isolated_repo_scoped(url: &str, workspace_id: Option<Uuid>) -> (PgRepository, SchemaGuard) {
+async fn isolated_repo_scoped(
+    url: &str,
+    workspace_id: Option<Uuid>,
+) -> (PgRepository, SchemaGuard) {
     let schema = unique_schema_name();
     let schema_guard = SchemaGuard::create(url, schema.clone()).await;
     let repo = repo_on_schema(url, schema, workspace_id).await;
@@ -97,13 +100,11 @@ async fn repo_on_schema(url: &str, schema: String, workspace_id: Option<Uuid>) -
 }
 
 async fn assert_index_exists(repo: &PgRepository, index_name: &str) {
-    let exists: Option<String> = sqlx::query_scalar(
-        "SELECT to_regclass($1)::text",
-    )
-    .bind(index_name)
-    .fetch_one(repo.pool())
-    .await
-    .unwrap();
+    let exists: Option<String> = sqlx::query_scalar("SELECT to_regclass($1)::text")
+        .bind(index_name)
+        .fetch_one(repo.pool())
+        .await
+        .unwrap();
 
     assert_eq!(exists.as_deref(), Some(index_name));
 }
@@ -326,8 +327,14 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
     .await
     .unwrap();
     assert_eq!(archived_out.rows.len(), 1);
-    assert_eq!(archived_out.rows[0].get("id").unwrap().as_str().unwrap(), created.document.id.to_string());
-    assert_eq!(archived_out.rows[0].get("status").unwrap(), &json!(DocumentStatus::ARCHIVED));
+    assert_eq!(
+        archived_out.rows[0].get("id").unwrap().as_str().unwrap(),
+        created.document.id.to_string()
+    );
+    assert_eq!(
+        archived_out.rows[0].get("status").unwrap(),
+        &json!(DocumentStatus::ARCHIVED)
+    );
     assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
 }
 
@@ -357,7 +364,9 @@ async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     let ids = UuidV4Generator;
 
     let mut repo = repo;
-    init_bundle(&mut repo, &governance, &clock, &ids).await.unwrap();
+    init_bundle(&mut repo, &governance, &clock, &ids)
+        .await
+        .unwrap();
 
     let first = create_document(
         &mut repo,
@@ -396,17 +405,22 @@ async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     .execute(repo.pool())
     .await;
 
-    assert!(bad_insert.is_err(), "cross-document parent revision insert should fail");
+    assert!(
+        bad_insert.is_err(),
+        "cross-document parent revision insert should fail"
+    );
 
-    let current_revision_update = sqlx::query(
-        "UPDATE documents SET current_revision_id = $1 WHERE id = $2",
-    )
-    .bind(first.revision.id.0)
-    .bind(second.document.id.0)
-    .execute(repo.pool())
-    .await;
+    let current_revision_update =
+        sqlx::query("UPDATE documents SET current_revision_id = $1 WHERE id = $2")
+            .bind(first.revision.id.0)
+            .bind(second.document.id.0)
+            .execute(repo.pool())
+            .await;
 
-    assert!(current_revision_update.is_err(), "cross-document current_revision_id update should fail");
+    assert!(
+        current_revision_update.is_err(),
+        "cross-document current_revision_id update should fail"
+    );
 }
 
 #[tokio::test]
@@ -421,7 +435,8 @@ async fn raw_sql_select_returns_json_maps() {
 
     let out = repo
         .query_raw_documents(RawQueryInput {
-            sql: r#"SELECT id, "type", status, content FROM documents ORDER BY created_at ASC"#.to_string(),
+            sql: r#"SELECT id, "type", status, content FROM documents ORDER BY created_at ASC"#
+                .to_string(),
             limit: Some(10),
             timeout_ms: Some(1000),
         })
@@ -430,7 +445,10 @@ async fn raw_sql_select_returns_json_maps() {
 
     assert_eq!(out.total_count, 3);
     assert_eq!(out.rows.len(), 3);
-    assert!(out.rows.iter().all(|row| row.contains_key("id") && row.contains_key("type") && row.contains_key("status") && row.contains_key("content")));
+    assert!(out.rows.iter().all(|row| row.contains_key("id")
+        && row.contains_key("type")
+        && row.contains_key("status")
+        && row.contains_key("content")));
 }
 
 #[tokio::test]
@@ -537,11 +555,25 @@ async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
     .await
     .unwrap();
 
-    assert_eq!(workspace_id_for_document(&scoped_a, doc_a.document.id).await, workspace_a);
-    assert_eq!(workspace_id_for_document(&scoped_b, doc_b.document.id).await, workspace_b);
+    assert_eq!(
+        workspace_id_for_document(&scoped_a, doc_a.document.id).await,
+        workspace_a
+    );
+    assert_eq!(
+        workspace_id_for_document(&scoped_b, doc_b.document.id).await,
+        workspace_b
+    );
 
-    assert!(scoped_a.get_document(doc_b.document.id).await.unwrap().is_none());
-    assert!(scoped_b.get_document(doc_a.document.id).await.unwrap().is_none());
+    assert!(scoped_a
+        .get_document(doc_b.document.id)
+        .await
+        .unwrap()
+        .is_none());
+    assert!(scoped_b
+        .get_document(doc_a.document.id)
+        .await
+        .unwrap()
+        .is_none());
 
     let mut where_a = Map::new();
     where_a.insert("type".to_string(), json!("general"));
@@ -576,8 +608,14 @@ async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
         })
         .await
         .unwrap();
-    assert!(raw_a.rows.iter().any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_a.document.id.to_string())));
-    assert!(!raw_a.rows.iter().any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_b.document.id.to_string())));
+    assert!(raw_a
+        .rows
+        .iter()
+        .any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_a.document.id.to_string())));
+    assert!(!raw_a
+        .rows
+        .iter()
+        .any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_b.document.id.to_string())));
 
     let global_gov = global_repo
         .find_latest_document_by_type(DocumentType::GOVERNANCE)

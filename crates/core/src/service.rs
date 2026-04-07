@@ -348,7 +348,9 @@ async fn reconcile_governance(
 
         let document = Document {
             id: doc_id,
-            doc_type: crate::document::DocumentType::new(crate::document::DocumentType::GOVERNANCE)?,
+            doc_type: crate::document::DocumentType::new(
+                crate::document::DocumentType::GOVERNANCE,
+            )?,
             status: DocumentStatus::active(),
             created_at: now,
             modified_at: now,
@@ -541,7 +543,10 @@ mod tests {
             panic!("unused")
         }
 
-        async fn update_document(&mut self, _doc: Document) -> Result<(), crate::errors::RepoError> {
+        async fn update_document(
+            &mut self,
+            _doc: Document,
+        ) -> Result<(), crate::errors::RepoError> {
             panic!("unused")
         }
 
@@ -566,11 +571,17 @@ mod tests {
             panic!("unused")
         }
 
-        async fn insert_revision(&mut self, _rev: DocumentRevision) -> Result<(), crate::errors::RepoError> {
+        async fn insert_revision(
+            &mut self,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
             panic!("unused")
         }
 
-        async fn update_revision(&mut self, _rev: DocumentRevision) -> Result<(), crate::errors::RepoError> {
+        async fn update_revision(
+            &mut self,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
             panic!("unused")
         }
 

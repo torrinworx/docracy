@@ -14,13 +14,10 @@ async fn tools_list_is_stable() {
 
             // IMPORTANT: `serve(...)` performs the MCP initialization handshake and will wait for the
             // peer's initialize request/response. Start server+client concurrently to avoid deadlock.
-            let (server, client) = timeout(
-                Duration::from_secs(2),
-                async move {
-                    let server = docracy_mcp::DocracyMcpServer::new_unbootstrapped();
-                    tokio::join!(server.serve(a), ().serve(b))
-                },
-            )
+            let (server, client) = timeout(Duration::from_secs(2), async move {
+                let server = docracy_mcp::DocracyMcpServer::new_unbootstrapped();
+                tokio::join!(server.serve(a), ().serve(b))
+            })
             .await
             .expect("server/client initialization timed out");
 
@@ -50,13 +47,10 @@ async fn tool_input_schema_has_expected_properties() {
             // Tool schemas can be sizeable; ensure the in-memory transport buffer is large enough.
             let (a, b) = tokio::io::duplex(4 * 1024 * 1024);
 
-            let (server, client) = timeout(
-                Duration::from_secs(2),
-                async move {
-                    let server = docracy_mcp::DocracyMcpServer::new_unbootstrapped();
-                    tokio::join!(server.serve(a), ().serve(b))
-                },
-            )
+            let (server, client) = timeout(Duration::from_secs(2), async move {
+                let server = docracy_mcp::DocracyMcpServer::new_unbootstrapped();
+                tokio::join!(server.serve(a), ().serve(b))
+            })
             .await
             .expect("server/client initialization timed out");
 

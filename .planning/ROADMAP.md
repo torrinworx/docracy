@@ -100,7 +100,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 5. Governance Model Cleanup | 2/2 | Complete   | 2026-04-06 |
 | 6. Craft launch marketing plan | 1/1 | Complete | 2026-04-06 |
 | 7. Custom SQL Query Strings | 0/2 | Planned | - |
-| 8. Workspace tenancy via MCP session binding | 0/2 | Planned | - |
+| 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 
 ## Archived Milestones
 
@@ -132,7 +132,7 @@ Plans:
 **Goal**: Define workspace tenancy for Docracy with generated workspace IDs, explicit MCP session binding through project-scoped client config and `WORKSPACE_ID`, and Postgres RLS isolation so each session only sees its active workspace while shared governance stays in the global scope.
 **Requirements**: WS-01, WS-02, WS-03, WS-04
 **Depends on:** Phase 7
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 08-01: Workspace schema, RLS policies, and scope-aware Postgres harness

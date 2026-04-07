@@ -160,7 +160,11 @@ fn version_to_i32(version: u32) -> Result<i32, RepoError> {
 }
 
 fn raw_query_limit(limit: Option<u32>) -> i64 {
-    i64::from(limit.unwrap_or(RAW_QUERY_DEFAULT_LIMIT).clamp(1, RAW_QUERY_LIMIT_CEILING))
+    i64::from(
+        limit
+            .unwrap_or(RAW_QUERY_DEFAULT_LIMIT)
+            .clamp(1, RAW_QUERY_LIMIT_CEILING),
+    )
 }
 
 fn raw_query_timeout(timeout_ms: Option<u64>) -> u64 {
