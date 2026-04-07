@@ -12,13 +12,11 @@ pub struct McpRuntime {
     pub governance: FsGovernanceSource,
     pub clock: SystemClock,
     pub ids: UuidV4Generator,
+    pub workspace_id: Option<uuid::Uuid>,
 }
 
 /// Run startup migrations when configured.
-pub async fn run_migrations(
-    repo: &PgRepository,
-    config: &McpStartupConfig,
-) -> anyhow::Result<()> {
+pub async fn run_migrations(repo: &PgRepository, config: &McpStartupConfig) -> anyhow::Result<()> {
     if !config.run_migrations {
         return Ok(());
     }
@@ -31,7 +29,7 @@ pub async fn run_migrations(
 /// Transport entrypoints (stdio, http) should call this to avoid duplicating
 /// startup logic.
 pub async fn bootstrap(config: &McpStartupConfig) -> anyhow::Result<McpRuntime> {
-    let repo = PgRepository::connect(&config.database_url)
+    let repo = PgRepository::connect_scoped(&config.database_url, config.workspace_id)
         .await
         .context("failed to connect to postgres")?;
     run_migrations(&repo, config).await?;
@@ -41,5 +39,6 @@ pub async fn bootstrap(config: &McpStartupConfig) -> anyhow::Result<McpRuntime> 
         governance: FsGovernanceSource::repo_owned(),
         clock: SystemClock,
         ids: UuidV4Generator,
+        workspace_id: config.workspace_id,
     })
 }

@@ -38,16 +38,24 @@ async fn run() -> anyhow::Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let database_url = match args.database_url.or_else(|| std::env::var("DATABASE_URL").ok()) {
+    let workspace_id =
+        docracy_mcp::config::parse_workspace_id(std::env::var("WORKSPACE_ID").ok().as_deref())
+            .map_err(|err| anyhow::anyhow!("invalid WORKSPACE_ID: {err}"))?;
+
+    let database_url = match args
+        .database_url
+        .or_else(|| std::env::var("DATABASE_URL").ok())
+    {
         Some(url) => url,
         None => anyhow::bail!("missing database url (pass --database-url or set DATABASE_URL)"),
     };
 
-    let config = McpStartupConfig {
+    let config = McpStartupConfig::new(
         database_url,
-        run_migrations: !args.no_migrate,
-        transport: McpTransport::Stdio,
-    };
+        !args.no_migrate,
+        workspace_id,
+        McpTransport::Stdio,
+    );
 
     let runtime = docracy_mcp::bootstrap(&config).await?;
     let service = docracy_mcp::DocracyMcpServer::new(runtime);
