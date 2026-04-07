@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
+use uuid::Uuid as WorkspaceUuid;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
@@ -32,7 +33,30 @@ impl PgRepository {
     }
 
     pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
-        let pool = PgPoolOptions::new().connect(database_url).await?;
+        Self::connect_scoped(database_url, None).await
+    }
+
+    pub async fn connect_scoped(
+        database_url: &str,
+        workspace_id: Option<WorkspaceUuid>,
+    ) -> Result<Self, sqlx::Error> {
+        let mut pool_options = PgPoolOptions::new();
+
+        if let Some(workspace_id) = workspace_id {
+            let workspace_id = workspace_id.to_string();
+            pool_options = pool_options.after_connect(move |conn, _meta| {
+                let workspace_id = workspace_id.clone();
+                Box::pin(async move {
+                    sqlx::query("SELECT set_config('docracy.workspace_id', $1, false)")
+                        .bind(workspace_id)
+                        .execute(&mut *conn)
+                        .await?;
+                    Ok(())
+                })
+            });
+        }
+
+        let pool = pool_options.connect(database_url).await?;
         Ok(Self::new(pool))
     }
 

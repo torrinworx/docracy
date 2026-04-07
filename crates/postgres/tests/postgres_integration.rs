@@ -58,16 +58,34 @@ impl Drop for SchemaGuard {
 }
 
 async fn isolated_repo(url: &str) -> (PgRepository, SchemaGuard) {
+    isolated_repo_scoped(url, None).await
+}
+
+async fn isolated_repo_scoped(url: &str, workspace_id: Option<Uuid>) -> (PgRepository, SchemaGuard) {
     let schema = unique_schema_name();
-    let _schema_guard = SchemaGuard::create(url, schema.clone()).await;
+    let schema_guard = SchemaGuard::create(url, schema.clone()).await;
+    let repo = repo_on_schema(url, schema, workspace_id).await;
+
+    (repo, schema_guard)
+}
+
+async fn repo_on_schema(url: &str, schema: String, workspace_id: Option<Uuid>) -> PgRepository {
+    let workspace_setting = workspace_id.map(|id| id.to_string());
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .after_connect(move |conn, _meta| {
             let schema = schema.clone();
+            let workspace_setting = workspace_setting.clone();
             Box::pin(async move {
                 let sql = format!("SET search_path TO \"{}\", public", schema);
-                sqlx::query(&sql).execute(conn).await?;
+                sqlx::query(&sql).execute(&mut *conn).await?;
+                if let Some(workspace_id) = workspace_setting {
+                    sqlx::query("SELECT set_config('docracy.workspace_id', $1, false)")
+                        .bind(workspace_id)
+                        .execute(&mut *conn)
+                        .await?;
+                }
                 Ok(())
             })
         })
@@ -75,7 +93,7 @@ async fn isolated_repo(url: &str) -> (PgRepository, SchemaGuard) {
         .await
         .unwrap();
 
-    (PgRepository::new(pool), _schema_guard)
+    PgRepository::new(pool)
 }
 
 async fn assert_index_exists(repo: &PgRepository, index_name: &str) {
@@ -98,6 +116,14 @@ async fn assert_index_absent(repo: &PgRepository, index_name: &str) {
         .unwrap();
 
     assert_eq!(exists, None);
+}
+
+async fn workspace_id_for_document(repo: &PgRepository, id: docracy_core::DocumentId) -> Uuid {
+    sqlx::query_scalar("SELECT workspace_id FROM documents WHERE id = $1")
+        .bind(id.0)
+        .fetch_one(repo.pool())
+        .await
+        .unwrap()
 }
 
 async fn seed_documents(repo: &PgRepository, count: i32) {
@@ -318,6 +344,10 @@ async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     assert_index_exists(&repo, "documents_modified_at_id_idx").await;
     assert_index_exists(&repo, "documents_single_governance_uq").await;
     assert_index_absent(&repo, "documents_single_constitution_uq").await;
+    assert_index_exists(&repo, "documents_workspace_created_at_id_idx").await;
+    assert_index_exists(&repo, "documents_workspace_modified_at_id_idx").await;
+    assert_index_exists(&repo, "documents_workspace_type_modified_at_id_idx").await;
+    assert_index_exists(&repo, "document_revisions_workspace_document_id_idx").await;
 
     let td = TempDir::new().unwrap();
     let governance_path = td.path().join("CONSTITUTION.md");
@@ -447,4 +477,117 @@ async fn raw_sql_limit_is_clamped_to_server_ceiling() {
 
     assert_eq!(out.total_count, 101);
     assert_eq!(out.rows.len(), 100);
+}
+
+#[tokio::test]
+async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let schema = unique_schema_name();
+    let _schema_guard = SchemaGuard::create(&url, schema.clone()).await;
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+
+    let global_repo = repo_on_schema(&url, schema.clone(), None).await;
+    global_repo.migrate().await.unwrap();
+
+    let td = TempDir::new().unwrap();
+    let governance_path = td.path().join("CONSTITUTION.md");
+    std::fs::write(&governance_path, "global governance").unwrap();
+    let governance = FsGovernanceSource::new(td.path());
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+
+    let mut global_repo = global_repo;
+    init_bundle(&mut global_repo, &governance, &clock, &ids)
+        .await
+        .unwrap();
+
+    let scoped_a = repo_on_schema(&url, schema.clone(), Some(workspace_a)).await;
+    let scoped_b = repo_on_schema(&url, schema.clone(), Some(workspace_b)).await;
+
+    let mut scoped_a = scoped_a;
+    let mut scoped_b = scoped_b;
+
+    let doc_a = create_document(
+        &mut scoped_a,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "a"}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let doc_b = create_document(
+        &mut scoped_b,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "b"}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(workspace_id_for_document(&scoped_a, doc_a.document.id).await, workspace_a);
+    assert_eq!(workspace_id_for_document(&scoped_b, doc_b.document.id).await, workspace_b);
+
+    assert!(scoped_a.get_document(doc_b.document.id).await.unwrap().is_none());
+    assert!(scoped_b.get_document(doc_a.document.id).await.unwrap().is_none());
+
+    let mut where_a = Map::new();
+    where_a.insert("type".to_string(), json!("general"));
+    let out_a = query_documents(
+        &scoped_a,
+        QueryInput {
+            query: None,
+            sql: None,
+            timeout_ms: None,
+            where_: where_a,
+            order_by: vec![],
+            select: vec!["id".to_string()],
+            limit: Some(10),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+    let ids_a: Vec<String> = out_a
+        .rows
+        .iter()
+        .map(|row| row.get("id").unwrap().as_str().unwrap().to_string())
+        .collect();
+    assert!(ids_a.contains(&doc_a.document.id.to_string()));
+    assert!(!ids_a.contains(&doc_b.document.id.to_string()));
+
+    let raw_a = scoped_a
+        .query_raw_documents(RawQueryInput {
+            sql: r#"SELECT id, workspace_id, content FROM documents WHERE "type" = 'general' ORDER BY created_at ASC"#.to_string(),
+            limit: Some(10),
+            timeout_ms: Some(1000),
+        })
+        .await
+        .unwrap();
+    assert!(raw_a.rows.iter().any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_a.document.id.to_string())));
+    assert!(!raw_a.rows.iter().any(|row| row.get("id").and_then(|v| v.as_str()) == Some(&doc_b.document.id.to_string())));
+
+    let global_gov = global_repo
+        .find_latest_document_by_type(DocumentType::GOVERNANCE)
+        .await
+        .unwrap()
+        .unwrap();
+    let scoped_gov = scoped_a
+        .find_latest_document_by_type(DocumentType::GOVERNANCE)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(global_gov.id, scoped_gov.id);
 }
