@@ -19,6 +19,16 @@ const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
 const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
 
+fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
+    if id.is_nil() {
+        return Err(RepoError::Storage(
+            "workspace id must not be the nil UUID".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 pub struct PgRepository {
     pool: PgPool,
 }
@@ -62,6 +72,38 @@ impl PgRepository {
 
     pub async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
         sqlx::migrate!("../../migrations").run(&self.pool).await
+    }
+
+    pub async fn create_workspace(&self, id: WorkspaceUuid) -> Result<(), RepoError> {
+        validate_workspace_id(id)?;
+
+        sqlx::query(
+            r#"
+INSERT INTO workspaces (id)
+VALUES ($1)
+            "#,
+        )
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_workspace_id;
+    use docracy_core::errors::RepoError;
+    use uuid::Uuid;
+
+    #[test]
+    fn validate_workspace_id_rejects_nil_uuid() {
+        assert!(matches!(
+            validate_workspace_id(Uuid::nil()),
+            Err(RepoError::Storage(message)) if message.contains("nil UUID")
+        ));
     }
 }
 

@@ -17,6 +17,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::io::Read;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
 struct CliErrorResponse {
@@ -83,8 +84,38 @@ enum Command {
         input: Option<String>,
     },
 
+    /// Workspace provisioning commands
+    Workspace {
+        #[command(subcommand)]
+        command: WorkspaceCommand,
+    },
+
     /// Apply migrations to the database
     Migrate,
+}
+
+#[derive(Subcommand, Debug)]
+enum WorkspaceCommand {
+    /// Create a workspace row and return its UUID
+    Create {
+        /// Optional workspace UUID override for scripted provisioning
+        #[arg(long)]
+        workspace_id: Option<String>,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+struct CliValidationError {
+    message: String,
+}
+
+impl CliValidationError {
+    fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -134,6 +165,15 @@ async fn run() -> Result<()> {
 
     let output = match cli.command {
         Command::Migrate => json!({"ok": true}),
+
+        Command::Workspace { command } => match command {
+            WorkspaceCommand::Create { workspace_id } => {
+                let workspace_id = resolve_workspace_id(workspace_id.as_deref())?;
+                repo.create_workspace(workspace_id).await?;
+
+                json!({"workspace_id": workspace_id.to_string()})
+            }
+        },
 
         Command::Init {} => {
             let governance = FsGovernanceSource::repo_owned();
@@ -230,7 +270,36 @@ fn print_json(v: Value, pretty: bool) -> Result<()> {
     Ok(())
 }
 
+fn resolve_workspace_id(input: Option<&str>) -> Result<Uuid> {
+    match input {
+        None => Ok(Uuid::new_v4()),
+        Some(value) => {
+            let workspace_id = Uuid::parse_str(value).map_err(|_| {
+                CliValidationError::new(format!("workspace_id must be a UUID: {value}"))
+            })?;
+
+            if workspace_id.is_nil() {
+                return Err(
+                    CliValidationError::new("workspace_id must not be the nil UUID").into(),
+                );
+            }
+
+            Ok(workspace_id)
+        }
+    }
+}
+
 fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
+    if let Some(validation_err) = err.downcast_ref::<CliValidationError>() {
+        return CliErrorResponse {
+            error: CliErrorBody {
+                kind: "validation_error".to_string(),
+                message: validation_err.to_string(),
+                details: None,
+            },
+        };
+    }
+
     if let Some(core_err) = err.downcast_ref::<CoreError>() {
         return CliErrorResponse {
             error: match core_err {
@@ -303,6 +372,8 @@ fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
+    use uuid::Uuid;
 
     #[test]
     fn migrate_subcommand_ignores_no_migrate_flag() {
@@ -319,5 +390,49 @@ mod tests {
             &Command::Query { input: None },
             false,
         ));
+    }
+
+    #[test]
+    fn cli_parses_workspace_create_subcommand() {
+        let cli = Cli::try_parse_from(["docracy", "workspace", "create"])
+            .expect("workspace create parses");
+
+        match cli.command {
+            Command::Workspace {
+                command: WorkspaceCommand::Create { workspace_id },
+            } => {
+                assert!(workspace_id.is_none());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cli_error_response_marks_validation_errors() {
+        let err = anyhow!(CliValidationError::new("workspace_id must be a UUID"));
+        let response = cli_error_response(&err);
+
+        assert_eq!(response.error.kind, "validation_error");
+        assert_eq!(response.error.message, "workspace_id must be a UUID");
+    }
+
+    #[test]
+    fn resolve_workspace_id_generates_a_non_nil_uuid_by_default() {
+        let resolved = resolve_workspace_id(None).expect("default workspace id");
+        assert_ne!(resolved, Uuid::nil());
+    }
+
+    #[test]
+    fn resolve_workspace_id_accepts_an_explicit_uuid() {
+        let expected = Uuid::from_u128(0x1234);
+        let resolved = resolve_workspace_id(Some(&expected.to_string())).expect("explicit id");
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn resolve_workspace_id_rejects_nil_uuid() {
+        let nil = Uuid::nil().to_string();
+        let err = resolve_workspace_id(Some(&nil)).unwrap_err();
+        assert!(err.to_string().contains("nil"));
     }
 }
