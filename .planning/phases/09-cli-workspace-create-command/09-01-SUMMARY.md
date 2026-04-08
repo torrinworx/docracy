@@ -22,7 +22,7 @@ tech-stack:
 
 key-files:
   created: [crates/cli/tests/workspace_create.rs, crates/cli/tests/fixtures/create_workspace_invalid_id.stderr.json]
-  modified: [crates/cli/Cargo.toml, crates/cli/src/main.rs, crates/cli/tests/cli_stderr.rs, crates/postgres/src/lib.rs, crates/postgres/tests/postgres_integration.rs, README.md, Cargo.lock]
+  modified: [crates/cli/Cargo.toml, crates/cli/src/main.rs, crates/cli/tests/cli_stderr.rs, crates/postgres/src/lib.rs, crates/postgres/tests/postgres_integration.rs, README.md, Cargo.lock, .planning/phases/09-cli-workspace-create-command/09-01-PLAN.md, .planning/phases/09-cli-workspace-create-command/09-CONTEXT.md]
 
 key-decisions:
   - "Keep workspace provisioning CLI-only and return the created UUID as JSON on stdout"
@@ -62,7 +62,8 @@ completed: 2026-04-08
 1. **Task 1: Add the CLI workspace-create command and Postgres insert helper** - `f6ed454` (feat)
 2. **Task 2: Add CLI regression tests and operator docs** - `f8cc4fc` (feat)
 
-**Plan metadata:** `pending` (to be committed with planning docs)
+**Plan metadata:** `45e2fde` (docs)
+**Planning context:** `febb0d8` (docs)
 
 ## Files Created/Modified
 - `crates/cli/Cargo.toml` - Added UUID and validation dependencies for the workspace command.
