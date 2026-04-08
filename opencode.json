@@ -1,18 +1,14 @@
 {
 	"$schema": "https://opencode.ai/config.json",
 	"mcp": {
-		"test-test-test": {
+		"docracy": {
 			"type": "local",
 			"enabled": true,
 			"command": [
 				"bash",
 				"-lc",
-				"cd /home/torrin/Data/Repos/Personal/docracy && exec /home/torrin/Data/Repos/Personal/docracy/target/debug/docracy-mcp"
-			],
-			"environment": {
-				"DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy",
-				"WORKSPACE_ID": "{env:DOCRACY_WORKSPACE_ID}"
-			}
+				"cd /home/torrin/Data/Repos/Personal/docracy && set -a && source .env && set +a && exec /home/torrin/Data/Repos/Personal/docracy/target/debug/docracy-mcp"
+			]
 		}
 	}
 }
