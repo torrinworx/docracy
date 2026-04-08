@@ -17,6 +17,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - v1.1 Phase 1 is complete: `crates/mcp` exists, owns runtime/config bootstrap, and delegates Init/Create/Read/Query/Update operations to `docracy_core` with interface-local error mapping + tests.
 - v1.1 Phase 7 is complete: query now supports a raw SQL escape hatch alongside the guided path, with read-only Postgres execution and documented ceilings.
 - v1.1 Phase 8 is complete: workspace tenancy is enforced with generated workspace IDs, explicit `WORKSPACE_ID` binding, and Postgres RLS isolation with shared/global fallback.
+- v1.1 Phase 9 is complete: operators can provision a workspace UUID from the CLI, persist the row in Postgres, and pass it into `WORKSPACE_ID` for MCP startup.
 
 ## Requirements
 
@@ -97,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.1 phase 8 completion*
+*Last updated: 2026-04-08 after v1.1 phase 9 completion*
