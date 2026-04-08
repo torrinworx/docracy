@@ -2,22 +2,75 @@
 
 ## Purpose
 
-Docracy is a durable document store for agentic work. It exists to keep project knowledge as typed, versioned documents with reliable read, query, and update behavior.
+Docracy is a durable memory ledger for agentic work.
+It stores typed documents with immutable revision history, safe concurrency, and query primitives.
 
-## Constitutional Rules
+## Ownership And Immutability
 
-1. This constitution is repo-owned and immutable through normal user-facing document operations.
-2. The system must keep exactly one stored constitution document, and its content must match this file.
-3. `init` must load the governance bundle and the active `context` documents.
-4. Documents are identified by stable document IDs and tracked through immutable revisions.
-5. Every successful update must append a new revision and advance the document head atomically.
-6. Updates must include the caller's expected current revision. Stale writes must fail rather than overwrite newer work.
-7. The `constitution` document type is reserved for the system. Public create and update flows must not allow agents to create or mutate constitution documents.
-8. Documents may carry `type`, `status`, timestamps, `content`, and `extensions`. `content` and `extensions` are agent-defined JSON values unless governance says otherwise.
-9. Query behavior applies to current documents. v1 supports structured filtering, ordering, pagination, and keyword search over document content.
-10. Extension data may be stored and returned, but querying or filtering on `extensions.*` is not part of the v1 contract.
-11. `context` documents are mutable governance guidance. They may refine conventions for agents, but they must not contradict this constitution.
+1. This constitution is Docracy-owned.
+2. Agents must treat it as immutable.
+3. `type=governance` is reserved for Docracy. Public Create/Update must not create or mutate governance documents.
+4. The system must keep exactly one stored governance document, and its content must match this constitution.
 
-## Change Policy
+## Data Model
 
-Changes to this constitution require editing this repo file. Interface-specific behavior may exist, but it must preserve the rules above.
+1. A document has: `id`, `type`, `status`, timestamps, `content` (non-null JSON), and `extensions` (JSON object).
+2. `type` and `status` are compact slugs: `[a-z][a-z0-9_]*` and <= 64 characters.
+3. Document history is stored as immutable revisions. The document head points at the current revision.
+
+## Init
+
+1. `init` must return the Docracy-owned governance bundle (markdown files).
+2. `init` must return all active `type=context` documents.
+3. Agents must call `init` at session start and follow governance plus active contexts.
+
+## Tools
+
+1. Use `query` to discover. Prefer minimal `select` first (example: `id,type,status,modified,title,summary`).
+2. Use `read` only for the small set of documents that matter.
+3. Use `create` to record new durable memory (non-governance types only).
+4. Use `update` to change an existing document by creating a new revision.
+
+## Updates And Concurrency
+
+1. Every successful update must append a new revision and advance the head atomically.
+2. Updates must include `expected_revision`. Stale writes must fail.
+
+## Query
+
+1. Guided query supports filters on: `type`, `status`, `archived`, `deleted`, `created_*`, `modified_*`.
+2. Guided query defaults to `status=active` unless archived/deleted filters are explicitly requested.
+3. Guided query supports keyword search over `content`.
+4. Guided query must not filter on `extensions.*` (not part of the v1 contract).
+5. If raw SQL query execution is supported, it must be read-only and bounded.
+
+## Memory Discipline
+
+1. Stored documents are for agents. Optimize for retrieval and reuse, not narration.
+2. Keep information condensed to core facts and durable details. Remove filler.
+3. Use list-friendly metadata for fast triage:
+4. `extensions.title` is a short label.
+5. `extensions.summary` is a 1 to 3 line compressed summary.
+6. Put searchable substance in `content`.
+
+## Document Type Conventions
+
+1. Use `type` as the primary kind so guided queries stay effective.
+2. Recommended durable types: `context`, `session`, `decision`, `preference`, `finding`, `task`, `playbook`, `general`.
+
+## Token Discipline
+
+1. Treat tokens as budget.
+2. Prefer progressive disclosure: `query` -> `read few` -> act -> write condensed memory.
+3. Delegate exploration and synthesis to subagents when it reduces context pollution. Subagents must return distilled results.
+
+## Questions
+
+1. Ask questions only when they reduce uncertainty, change the outcome, reduce risk, or unblock progress.
+2. Every question must have a clear purpose. No filler.
+
+## Context Documents
+
+1. Context documents are mutable operating instructions (`type=context`, `status=active`).
+2. Context documents must specify: tool usage patterns, note formats, note-taking triggers, delegation rules, and response style.
+3. Context documents must not contradict this constitution.
