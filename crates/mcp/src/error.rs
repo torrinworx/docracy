@@ -14,6 +14,7 @@ pub enum McpErrorKind {
     ValidationError,
     Conflict,
     RevisionConflict,
+    WorkspaceNotProvisioned,
     StorageError,
     GovernanceIoError,
     MissingGovernance,
@@ -54,6 +55,17 @@ impl McpError {
             }
             CoreError::Repo(RepoError::Conflict) => {
                 McpError::new(McpErrorKind::Conflict, "conflict")
+            }
+            CoreError::Repo(RepoError::WorkspaceNotProvisioned { workspace_id }) => {
+                McpError::new(
+                    McpErrorKind::WorkspaceNotProvisioned,
+                    format!(
+                        "workspace not provisioned: workspace_id={workspace_id}; create the workspace row first or unset WORKSPACE_ID to use the shared/global workspace"
+                    ),
+                )
+                .with_details(json!({
+                    "workspace_id": workspace_id,
+                }))
             }
             CoreError::Repo(RepoError::Storage(message)) => {
                 McpError::new(McpErrorKind::StorageError, message)
@@ -116,6 +128,9 @@ impl McpError {
             }
             DocumentNotFound | RevisionNotFound | MissingCurrentRevision => {
                 rmcp::model::ErrorData::invalid_request(self.message.clone(), Some(data))
+            }
+            WorkspaceNotProvisioned => {
+                rmcp::model::ErrorData::internal_error(self.message.clone(), Some(data))
             }
             _ => rmcp::model::ErrorData::internal_error(self.message.clone(), Some(data)),
         }

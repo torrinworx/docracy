@@ -1,11 +1,17 @@
 use crate::validation::ValidationError;
 use crate::RevisionId;
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum RepoError {
     #[error("conflict")]
     Conflict,
+
+    #[error(
+        "workspace not provisioned: workspace_id={workspace_id}; create it with `docracy workspace create --workspace-id {workspace_id}` or unset WORKSPACE_ID to use the shared/global workspace"
+    )]
+    WorkspaceNotProvisioned { workspace_id: Uuid },
 
     #[error("storage error: {0}")]
     Storage(String),

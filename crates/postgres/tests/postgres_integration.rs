@@ -653,3 +653,36 @@ async fn create_workspace_inserts_workspace_row() {
 
     assert!(workspace_exists(&repo, workspace_id).await);
 }
+
+#[tokio::test]
+async fn scoped_workspace_missing_row_surfaces_actionable_error() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_id = Uuid::new_v4();
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
+    repo.migrate().await.unwrap();
+
+    let err = create_document(
+        &mut repo,
+        &SystemClock,
+        &UuidV4Generator,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"hello": "world"}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap_err();
+
+    match err {
+        docracy_core::CoreError::Repo(docracy_core::RepoError::WorkspaceNotProvisioned {
+            workspace_id: err_workspace_id,
+        }) => {
+            assert_eq!(err_workspace_id, workspace_id);
+        }
+        other => panic!("unexpected error: {other:?}"),
+    }
+}

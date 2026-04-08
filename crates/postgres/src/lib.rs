@@ -31,11 +31,15 @@ fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
 
 pub struct PgRepository {
     pool: PgPool,
+    workspace_id: Option<WorkspaceUuid>,
 }
 
 impl PgRepository {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            workspace_id: None,
+        }
     }
 
     pub fn pool(&self) -> &PgPool {
@@ -51,8 +55,9 @@ impl PgRepository {
         workspace_id: Option<WorkspaceUuid>,
     ) -> Result<Self, sqlx::Error> {
         let mut pool_options = PgPoolOptions::new();
+        let workspace_id_for_pool = workspace_id.clone();
 
-        if let Some(workspace_id) = workspace_id {
+        if let Some(workspace_id) = workspace_id_for_pool {
             let workspace_id = workspace_id.to_string();
             pool_options = pool_options.after_connect(move |conn, _meta| {
                 let workspace_id = workspace_id.clone();
@@ -67,7 +72,10 @@ impl PgRepository {
         }
 
         let pool = pool_options.connect(database_url).await?;
-        Ok(Self::new(pool))
+        Ok(Self {
+            pool,
+            workspace_id,
+        })
     }
 
     pub async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
@@ -143,6 +151,28 @@ fn map_sqlx_error(e: sqlx::Error) -> RepoError {
             RepoError::Storage(format!("{db}"))
         }
         _ => RepoError::Storage(e.to_string()),
+    }
+}
+
+fn is_workspace_fk_violation(e: &sqlx::Error) -> bool {
+    match e {
+        sqlx::Error::Database(db) => {
+            db.code().as_deref() == Some("23503")
+                && matches!(
+                    db.constraint(),
+                    Some("documents_workspace_id_fkey" | "document_revisions_workspace_id_fkey")
+                )
+        }
+        _ => false,
+    }
+}
+
+fn workspace_fk_error(workspace_id: Option<WorkspaceUuid>) -> RepoError {
+    match workspace_id {
+        Some(workspace_id) => RepoError::WorkspaceNotProvisioned { workspace_id },
+        None => RepoError::Storage(
+            "workspace not provisioned: the current session workspace_id has no matching row in workspaces".to_string(),
+        ),
     }
 }
 
@@ -256,7 +286,13 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         .bind(extensions_as_value(&doc.extensions))
         .execute(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(|e| {
+            if is_workspace_fk_violation(&e) {
+                workspace_fk_error(self.workspace_id)
+            } else {
+                map_sqlx_error(e)
+            }
+        })?;
 
         sqlx::query(
             r#"
@@ -276,7 +312,13 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         .bind(extensions_as_value(&rev.extensions))
         .execute(&mut *tx)
         .await
-        .map_err(map_sqlx_error)?;
+        .map_err(|e| {
+            if is_workspace_fk_violation(&e) {
+                workspace_fk_error(self.workspace_id)
+            } else {
+                map_sqlx_error(e)
+            }
+        })?;
 
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())

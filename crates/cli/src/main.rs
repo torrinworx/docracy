@@ -320,6 +320,15 @@ fn cli_error_response(err: &anyhow::Error) -> CliErrorResponse {
                     message: "revision conflict".to_string(),
                     details: None,
                 },
+                CoreError::Repo(RepoError::WorkspaceNotProvisioned { workspace_id }) => {
+                    CliErrorBody {
+                        kind: "workspace_not_provisioned".to_string(),
+                        message: core_err.to_string(),
+                        details: Some(json!({
+                            "workspace_id": workspace_id,
+                        })),
+                    }
+                }
                 CoreError::Repo(RepoError::Storage(message)) => CliErrorBody {
                     kind: "storage_error".to_string(),
                     message: message.clone(),

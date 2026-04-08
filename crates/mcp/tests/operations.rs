@@ -8,6 +8,7 @@ use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{DocumentType, MemoryRepository, NewDocument, UpdateDocumentInput};
 use docracy_mcp::{operations, McpErrorKind};
 use serde_json::{json, Map, Value};
+use uuid::Uuid;
 
 #[tokio::test(flavor = "current_thread")]
 async fn query_documents_delegates_to_core() {
@@ -111,4 +112,16 @@ async fn update_revision_conflict_maps_to_machine_readable_details() {
         details.get("actual"),
         Some(&serde_json::to_value(Some(updated.new_revision.id)).unwrap())
     );
+}
+
+#[test]
+fn workspace_not_provisioned_maps_to_machine_readable_details() {
+    let workspace_id = Uuid::new_v4();
+    let err = docracy_mcp::McpError::from_core(docracy_core::CoreError::Repo(
+        docracy_core::RepoError::WorkspaceNotProvisioned { workspace_id },
+    ));
+
+    assert_eq!(err.kind, McpErrorKind::WorkspaceNotProvisioned);
+    let details = err.details.expect("expected structured details");
+    assert_eq!(details.get("workspace_id"), Some(&serde_json::json!(workspace_id)));
 }
