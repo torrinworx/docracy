@@ -9,8 +9,11 @@ The MCP server can run in either shared/global mode or workspace-bound mode.
 - If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full lifetime of the MCP session.
 - If `WORKSPACE_ID` is omitted, the server stays in the shared/global path.
 - Project-scoped OpenCode config should provide `WORKSPACE_ID` from client environment (for example `DOCRACY_WORKSPACE_ID`), not by inferring identity from the repository path.
+- If `DOCRACY_TASK_SCOPE` is set at startup, the process computes a task-scoped subset for Init convenience fields.
 - Shared/global governance remains readable in both modes; workspace-scoped sessions see their workspace plus the shared governance rows.
 - Startup still uses the fixed repo-owned `./governance` bundle.
+
+Task scoping uses `extensions.task_scopes` (an array of strings) on context documents. The full `context_documents` list remains the active set; `task_context_documents` is additive and filtered by the configured task scope.
 
 ## Tools
 
@@ -33,7 +36,9 @@ Output:
 ```json
 {
   "governance": { "files": [{ "name": "...", "content": "..." }] },
-  "context_documents": []
+  "context_documents": [],
+  "task_scope": null,
+  "task_context_documents": []
 }
 ```
 
@@ -121,6 +126,7 @@ Output:
 - The tool inputs/outputs intentionally mirror the CLI JSON contract.
 - `init` is a tool call, but server startup configuration (database URL, fixed repo-owned `./governance` bundle, migration policy) is handled at process startup rather than via tool parameters.
 - Workspace binding is also handled at process startup through `WORKSPACE_ID`, so client config can select a tenant without adding a tool argument.
+- Task-scoped init context selection is handled at process startup through `DOCRACY_TASK_SCOPE`, so clients can receive both the full active context set and the filtered task subset without adding a tool argument.
 
 ## Error Contract
 

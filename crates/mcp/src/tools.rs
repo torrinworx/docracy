@@ -76,6 +76,8 @@ impl DocracyMcpServer {
         let out = json!({
             "governance": {"files": governance_files},
             "context_documents": out.context_documents,
+            "task_scope": out.task_scope,
+            "task_context_documents": out.task_context_documents,
         });
 
         Content::json(out)
