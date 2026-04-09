@@ -103,7 +103,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
 | 10. Task-scoped init contexts | 3/3 | Complete    | 2026-04-09 |
-| 11. Refresh README usage docs | 0/2 | Planned | - |
+| 11. Refresh README usage docs | 2/2 | Complete   | 2026-04-09 |
 
 ## Archived Milestones
 
@@ -168,8 +168,8 @@ Plans:
 **Goal**: The root README and MCP README accurately describe the current shipped usage surface, including task-scoped init, workspace bootstrap, and startup env vars.
 **Requirements**: DOC-01
 **Depends on:** Phase 10
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 11-01: Refresh root README current-state and usage sections
-- [ ] 11-02: Refresh MCP README contract and startup sections
+- [x] 11-01: Refresh root README current-state and usage sections
+- [x] 11-02: Refresh MCP README contract and startup sections

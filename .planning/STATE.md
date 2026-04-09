@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
-status: unknown
-stopped_at: Completed 10-03-PLAN.md
-last_updated: "2026-04-09T12:20:04.507Z"
+current_plan: 2
+status: ready_for_verification
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-04-09T13:25:12.728Z"
 progress:
   total_phases: 14
-  completed_phases: 11
-  total_plans: 21
-  completed_plans: 22
+  completed_phases: 12
+  total_plans: 23
+  completed_plans: 24
 ---
 
 # Project State
@@ -19,12 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 10 — task-scoped-init-contexts
+**Current focus:** Phase 11 — refresh-readme-usage-docs
 
 ## Current Position
 
 Phase: 11
-Plan: Not started
+Plan: Complete
+Current Plan: 2
+Total Plans in Phase: 2
 
 ## Performance Metrics
 
@@ -68,6 +71,8 @@ Plan: Not started
 | Phase 10-task-scoped-init-contexts P01 | 18 min | 1 tasks | 2 files |
 | Phase 10-task-scoped-init-contexts P02 | 1 min | 2 tasks | 2 files |
 | Phase 10-task-scoped-init-contexts P03 | 3 min | 2 tasks | 6 files |
+| Phase 11 P01 | 12 min | 1 tasks | 1 files |
+| Phase 11 P02 | 11 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -129,6 +134,8 @@ Recent decisions affecting current work:
 - [Phase 10-task-scoped-init-contexts]: Use extensions.task_scopes as the data-driven selector for scoped contexts.
 - [Phase 10-task-scoped-init-contexts]: Keep task scope process-configured via DOCRACY_TASK_SCOPE instead of adding a tool parameter.
 - [Phase 10-task-scoped-init-contexts]: Preserve context_documents as the full active set and add task_context_documents as an additive subset.
+- [Phase 11]: State the current milestone as v1.1 MCP Server Interface instead of v1.0
+- [Phase 11]: Document DOCRACY_TASK_SCOPE as optional and additive rather than a replacement for context_documents
 
 ### Milestone Setup
 
@@ -165,6 +172,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-09T04:26:02.293Z
-Stopped at: Completed 10-03-PLAN.md
+Last session: 2026-04-09T13:24:56.683Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
