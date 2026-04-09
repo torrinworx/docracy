@@ -123,5 +123,8 @@ fn workspace_not_provisioned_maps_to_machine_readable_details() {
 
     assert_eq!(err.kind, McpErrorKind::WorkspaceNotProvisioned);
     let details = err.details.expect("expected structured details");
-    assert_eq!(details.get("workspace_id"), Some(&serde_json::json!(workspace_id)));
+    assert_eq!(
+        details.get("workspace_id"),
+        Some(&serde_json::json!(workspace_id))
+    );
 }

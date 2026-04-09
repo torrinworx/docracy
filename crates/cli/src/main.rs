@@ -185,14 +185,9 @@ async fn run() -> Result<()> {
         Command::Init {} => {
             let governance = FsGovernanceSource::repo_owned();
             let task_scope = normalize_task_scope(std::env::var("DOCRACY_TASK_SCOPE").ok());
-            let out = init_bundle_scoped(
-                &mut repo,
-                &governance,
-                &clock,
-                &ids,
-                task_scope.as_deref(),
-            )
-            .await?;
+            let out =
+                init_bundle_scoped(&mut repo, &governance, &clock, &ids, task_scope.as_deref())
+                    .await?;
 
             let governance_files: Vec<Value> = out
                 .governance

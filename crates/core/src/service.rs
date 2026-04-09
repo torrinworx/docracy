@@ -3,7 +3,7 @@ use crate::errors::CoreError;
 use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
 use crate::query::{
-    GuidedQueryInput, QueryExecution, QueryInput, QueryResult, encode_cursor, project_rows,
+    encode_cursor, project_rows, GuidedQueryInput, QueryExecution, QueryInput, QueryResult,
 };
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
@@ -448,11 +448,11 @@ async fn reconcile_governance(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DocumentType;
-    use crate::QueryInput;
     use crate::memory::MemoryRepository;
     use crate::query::{DocumentQuery, DocumentQueryResult, RawQueryInput, RawQueryResult};
     use crate::repository::Repository;
+    use crate::DocumentType;
+    use crate::QueryInput;
     use chrono::TimeZone;
     use serde_json::json;
     use serde_json::{Map, Value};
@@ -684,7 +684,7 @@ mod tests {
         }
     }
 
-    use fixtures::{FixedClock, FixedIds, SeqIds, seeded_document};
+    use fixtures::{seeded_document, FixedClock, FixedIds, SeqIds};
 
     #[tokio::test(flavor = "current_thread")]
     async fn create_then_update_creates_revision_chain() {
@@ -921,21 +921,18 @@ mod tests {
         assert_eq!(out.context_documents.len(), 3);
         assert_eq!(out.task_scope, Some("planning".to_string()));
         assert_eq!(out.task_context_documents.len(), 2);
-        assert!(
-            out.task_context_documents
-                .iter()
-                .any(|doc| doc.content == json!({"kind": "unscoped"}))
-        );
-        assert!(
-            out.task_context_documents
-                .iter()
-                .any(|doc| doc.content == json!({"kind": "planning"}))
-        );
-        assert!(
-            !out.task_context_documents
-                .iter()
-                .any(|doc| doc.content == json!({"kind": "execution"}))
-        );
+        assert!(out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "unscoped"})));
+        assert!(out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "planning"})));
+        assert!(!out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "execution"})));
     }
 
     #[tokio::test(flavor = "current_thread")]

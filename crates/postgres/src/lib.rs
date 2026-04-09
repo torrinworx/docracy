@@ -72,10 +72,7 @@ impl PgRepository {
         }
 
         let pool = pool_options.connect(database_url).await?;
-        Ok(Self {
-            pool,
-            workspace_id,
-        })
+        Ok(Self { pool, workspace_id })
     }
 
     pub async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {

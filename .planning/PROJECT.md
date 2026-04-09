@@ -18,6 +18,7 @@ Agents can reliably store, evolve, and retrieve durable project knowledge as ver
 - v1.1 Phase 7 is complete: query now supports a raw SQL escape hatch alongside the guided path, with read-only Postgres execution and documented ceilings.
 - v1.1 Phase 8 is complete: workspace tenancy is enforced with generated workspace IDs, explicit `WORKSPACE_ID` binding, and Postgres RLS isolation with shared/global fallback.
 - v1.1 Phase 9 is complete: operators can provision a workspace UUID from the CLI, persist the row in Postgres, and pass it into `WORKSPACE_ID` for MCP startup.
+- v1.1 Phase 10 is complete: Init now adds an optional task-scoped context subset while preserving the full active context contract across CLI and MCP.
 
 ## Requirements
 
@@ -98,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-08 after v1.1 phase 9 completion*
+*Last updated: 2026-04-09 after v1.1 phase 10 completion*

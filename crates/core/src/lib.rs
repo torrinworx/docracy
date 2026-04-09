@@ -23,8 +23,8 @@ pub use query::{
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};
 pub use service::{
-    CreateDocumentResult, InitBundleResult, ReadDocumentsResult, UpdateDocumentInput,
-    UpdateDocumentResult, create_document, init_bundle, init_bundle_scoped, query_documents,
-    read_documents, update_document,
+    create_document, init_bundle, init_bundle_scoped, query_documents, read_documents,
+    update_document, CreateDocumentResult, InitBundleResult, ReadDocumentsResult,
+    UpdateDocumentInput, UpdateDocumentResult,
 };
 pub use validation::{ValidationError, ValidationResult};

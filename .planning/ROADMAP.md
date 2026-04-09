@@ -102,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Custom SQL Query Strings | 0/2 | Planned | - |
 | 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
-| 10. Task-scoped init contexts | 3/3 | Complete   | 2026-04-09 |
+| 10. Task-scoped init contexts | 3/3 | Complete    | 2026-04-09 |
 
 ## Archived Milestones
 
