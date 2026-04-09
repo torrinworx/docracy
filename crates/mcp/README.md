@@ -4,16 +4,15 @@ This crate exposes the shipped Docracy contract (Init/Create/Read/Query/Update) 
 
 ## Workspace Binding
 
-The MCP server can run in either shared/global mode or workspace-bound mode.
+The MCP server runs in either shared/global mode or workspace-bound mode.
 
-- If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full lifetime of the MCP session.
-- If `WORKSPACE_ID` is omitted, the server stays in the shared/global path.
-- Project-scoped OpenCode config should provide `WORKSPACE_ID` from client environment (for example `DOCRACY_WORKSPACE_ID`), not by inferring identity from the repository path.
-- If `DOCRACY_TASK_SCOPE` is set at startup, the process computes a task-scoped subset for Init convenience fields.
+- If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full MCP session.
+- If `WORKSPACE_ID` is omitted, the server stays on the shared/global path.
+- `DOCRACY_TASK_SCOPE` is optional and additive; it only narrows the Init convenience subset.
+- `context_documents` remains the full active set.
+- `task_context_documents` is filtered via `extensions.task_scopes` on context documents.
 - Shared/global governance remains readable in both modes; workspace-scoped sessions see their workspace plus the shared governance rows.
 - Startup still uses the fixed repo-owned `./governance` bundle.
-
-Task scoping uses `extensions.task_scopes` (an array of strings) on context documents. The full `context_documents` list remains the active set; `task_context_documents` is additive and filtered by the configured task scope.
 
 ## Tools
 
@@ -82,7 +81,7 @@ Input: `docracy_core::query::QueryInput`
 }
 ```
 
-If `sql` is present, it takes precedence over `query`/`where`/`order_by`/`select`. Raw SQL runs read-only and is clamped to 100 rows and 5000ms.
+If `sql` is present, it takes precedence over `query`/`where`/`order_by`/`select`. raw SQL runs read-only and is clamped to 100 rows and 5000ms.
 
 Guided fallback example:
 
