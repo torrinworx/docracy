@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 10-02-PLAN.md
-last_updated: "2026-04-09T04:25:33.785Z"
+stopped_at: Completed 10-03-PLAN.md
+last_updated: "2026-04-09T04:26:02.295Z"
 progress:
   total_phases: 14
-  completed_phases: 10
+  completed_phases: 11
   total_plans: 21
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # Project State
@@ -67,6 +67,7 @@ Plan: 3 of 3
 | Phase 09-cli-workspace-create-command P01 | 59 min | 2 tasks | 9 files |
 | Phase 10-task-scoped-init-contexts P01 | 18 min | 1 tasks | 2 files |
 | Phase 10-task-scoped-init-contexts P02 | 1 min | 2 tasks | 2 files |
+| Phase 10-task-scoped-init-contexts P03 | 3 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,8 @@ Recent decisions affecting current work:
 - [Phase 10-task-scoped-init-contexts]: Keep context_documents as the full active context set and add task-scoped fields alongside it.
 - [Phase 10-task-scoped-init-contexts]: Use DOCRACY_TASK_SCOPE as the only CLI input for specialty init selection.
 - [Phase 10-task-scoped-init-contexts]: Use extensions.task_scopes as the data-driven selector for scoped contexts.
+- [Phase 10-task-scoped-init-contexts]: Keep task scope process-configured via DOCRACY_TASK_SCOPE instead of adding a tool parameter.
+- [Phase 10-task-scoped-init-contexts]: Preserve context_documents as the full active set and add task_context_documents as an additive subset.
 
 ### Milestone Setup
 
@@ -162,6 +165,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-09T04:25:33.783Z
-Stopped at: Completed 10-02-PLAN.md
+Last session: 2026-04-09T04:26:02.293Z
+Stopped at: Completed 10-03-PLAN.md
 Resume file: None
