@@ -13,6 +13,7 @@ pub struct McpRuntime {
     pub clock: SystemClock,
     pub ids: UuidV4Generator,
     pub workspace_id: Option<uuid::Uuid>,
+    pub task_scope: Option<String>,
 }
 
 /// Run startup migrations when configured.
@@ -40,5 +41,6 @@ pub async fn bootstrap(config: &McpStartupConfig) -> anyhow::Result<McpRuntime> 
         clock: SystemClock,
         ids: UuidV4Generator,
         workspace_id: config.workspace_id,
+        task_scope: config.task_scope.clone(),
     })
 }

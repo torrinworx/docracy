@@ -30,13 +30,15 @@ pub async fn init_bundle(
 
 /// Runtime convenience wrapper for [`init_bundle`].
 pub async fn init_bundle_runtime(runtime: &mut McpRuntime) -> Result<InitBundleResult, McpError> {
-    init_bundle(
+    docracy_core::init_bundle_scoped(
         &mut runtime.repo,
         &runtime.governance,
         &runtime.clock,
         &runtime.ids,
+        runtime.task_scope.as_deref(),
     )
     .await
+    .map_err(McpError::from_core)
 }
 
 /// Create a new document + initial revision.

@@ -26,6 +26,8 @@ pub struct McpStartupConfig {
     pub run_migrations: bool,
     /// Optional workspace binding for the process lifetime.
     pub workspace_id: Option<Uuid>,
+    /// Optional task-scoped init selector for Init convenience fields.
+    pub task_scope: Option<String>,
     /// Which transport the outer entrypoint should serve.
     pub transport: McpTransport,
 }
@@ -35,12 +37,14 @@ impl McpStartupConfig {
         database_url: impl Into<String>,
         run_migrations: bool,
         workspace_id: Option<Uuid>,
+        task_scope: Option<String>,
         transport: McpTransport,
     ) -> Self {
         Self {
             database_url: database_url.into(),
             run_migrations,
             workspace_id,
+            task_scope,
             transport,
         }
     }
@@ -54,9 +58,17 @@ pub fn parse_workspace_id(value: Option<&str>) -> Result<Option<Uuid>, uuid::Err
     }
 }
 
+/// Parse an optional task scope selector from an environment value.
+pub fn parse_task_scope(value: Option<&str>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_workspace_id, McpStartupConfig, McpTransport};
+    use super::{parse_task_scope, parse_workspace_id, McpStartupConfig, McpTransport};
     use uuid::Uuid;
 
     #[test]
@@ -66,10 +78,12 @@ mod tests {
             "postgres://example",
             true,
             Some(workspace_id),
+            Some("task/alpha".to_string()),
             McpTransport::Stdio,
         );
 
         assert_eq!(config.workspace_id, Some(workspace_id));
+        assert_eq!(config.task_scope.as_deref(), Some("task/alpha"));
     }
 
     #[test]
@@ -80,5 +94,19 @@ mod tests {
     #[test]
     fn parse_workspace_id_rejects_invalid_uuid() {
         assert!(parse_workspace_id(Some("not-a-uuid")).is_err());
+    }
+
+    #[test]
+    fn parse_task_scope_trims_value() {
+        assert_eq!(
+            parse_task_scope(Some("  task/alpha  ")),
+            Some("task/alpha".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_task_scope_discards_empty_value() {
+        assert_eq!(parse_task_scope(Some("   ")), None);
+        assert_eq!(parse_task_scope(None), None);
     }
 }

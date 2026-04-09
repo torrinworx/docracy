@@ -41,6 +41,8 @@ async fn run() -> anyhow::Result<()> {
     let workspace_id =
         docracy_mcp::config::parse_workspace_id(std::env::var("WORKSPACE_ID").ok().as_deref())
             .map_err(|err| anyhow::anyhow!("invalid WORKSPACE_ID: {err}"))?;
+    let task_scope =
+        docracy_mcp::config::parse_task_scope(std::env::var("DOCRACY_TASK_SCOPE").ok().as_deref());
 
     let database_url = match args
         .database_url
@@ -54,6 +56,7 @@ async fn run() -> anyhow::Result<()> {
         database_url,
         !args.no_migrate,
         workspace_id,
+        task_scope,
         McpTransport::Stdio,
     );
 
