@@ -6,13 +6,13 @@ You can give an LLM tools to use a filesystem, so why not give it tools for work
 
 ## Current state:
 
-Docracy v1.0 is the Postgres-backed document store, revision model, test harness, and CLI. The current contract is:
+Docracy v1.1 MCP Server Interface is the current shipped milestone. The current contract is:
 
-- Init/Create/Read/Query/Update are implemented.
+- Init/Create/Read/Query/Update are the shipped tools.
 - Documents have `type`, `status`, timestamps, `content`, `extensions`, and a current revision head.
 - Updates create immutable revisions and require `expected_revision` so stale writes fail.
-- `Init` returns the repo-owned `./governance` markdown files and all active `context` documents created by other agents.
-- `Init` can also expose an additive task-scoped subset via `DOCRACY_TASK_SCOPE` without changing the meaning of active context documents.
+- `Init` returns the repo-owned `./governance` markdown files and all active `context` documents.
+- `DOCRACY_TASK_SCOPE` adds optional `task_scope` and `task_context_documents` fields; it never replaces `context_documents`.
 - Postgres migrations, full-text content search, filtering, ordering, pagination, and tests are in place.
 
 Future ideas and non-finalized notes are kept separate below so the current v1 behavior is easy to read.
@@ -37,8 +37,8 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 ### Workspace bootstrap
 
 - Run `docracy workspace create` to provision a workspace row and receive a JSON `workspace_id`.
-- Pass `--workspace-id <uuid>` when you need scripted or repeatable provisioning.
-- Export the returned UUID into `WORKSPACE_ID` before starting MCP sessions.
+- Export that UUID into `WORKSPACE_ID` before starting MCP sessions.
+- If your client config carries its own env values, keep `DOCRACY_WORKSPACE_ID` and `DOCRACY_TASK_SCOPE` alongside the runtime `WORKSPACE_ID` handoff.
 - Workspace management stays CLI-only; the MCP server still exposes only Init/Create/Read/Query/Update.
 
 ### Future ideas
@@ -66,9 +66,9 @@ The repo-owned governance bundle under `./governance` is immutable and part of t
 
 ### Shipped in v1
 
-- **governance** hard-coded in this repo, stored in the DB on init, loaded on every call of `Init`.
-- **context** general knowledge and things an agent needs to know for the project; generalized information can be stored in any number of documents, but these are always present while active. CRUD operations work for these, and they are important because they are loaded into every context for every future agent.
-- **general** general knowledge store, intended to create a store whenever there is a learning, decision, or piece of information created by the user or an agent. This is the "agent bureaucracy" side of things. The agent can freely control how general documents are stored and created, how they reference each other, and what type and quality of information they store. It is ideal that they outline the structure of their documents in the seed context documents.
+- **governance** repo-owned instructions, stored in the DB on init, loaded on every call of `Init`.
+- **context** general knowledge and things an agent needs to know for the project; these remain the active set while present.
+- **general** general knowledge store, intended to capture learning, decisions, and other durable facts created by the user or an agent.
 
 ### Future ideas
 
@@ -367,12 +367,16 @@ Suggested development phases to follow. This is effectively the order that produ
 
 
 
-# How to use:
+## How to use:
 
 Prerequisites: install and configure OpenCode.
 
-For OpenCode:
-1. Set up Docracy MCP config:
+1. Provision a workspace row:
+```bash
+docracy workspace create
+```
+
+2. Export the returned UUID into `WORKSPACE_ID` for the MCP process, and keep `DOCRACY_WORKSPACE_ID` / `DOCRACY_TASK_SCOPE` in your client env if you use them:
 ```json
 "mcp": {
   "docracy": {
@@ -387,19 +391,21 @@ For OpenCode:
       "--",
     ],
     "environment": {
-      "DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy"
+      "DATABASE_URL": "postgresql://docracy:docracy_dev_password@localhost:5432/docracy",
+      "DOCRACY_WORKSPACE_ID": "<workspace uuid from `docracy workspace create`>",
+      "DOCRACY_TASK_SCOPE": "<optional task scope>",
+      "WORKSPACE_ID": "<same workspace uuid for MCP startup>"
     }
   }
 }
 ```
-2. Run the Docker Compose file:
+3. Run the Docker Compose file:
 ```bash
-cd ./docracy
 docker compose up -d
 ```
-3. Add an AGENTS.md file to your repo and place something like this in it:
+4. Add an AGENTS.md file to your repo and place this in it:
 ```md
 <!-- DOCRACY -->
 Before responding to the user or conducting a task, run the docracy_init tool call. This will provide you with the necessary context managed by the Docracy system to operate effectively in this repository.  
 ```
-4. Start chatting. Now the Docracy governance documents and your agent-generated context documents will be auto-loaded into all your future conversations with a given repo.
+5. Start chatting. Now the Docracy governance documents and your agent-generated context documents will be auto-loaded into all your future conversations with a given repo.
