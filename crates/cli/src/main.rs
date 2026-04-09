@@ -9,7 +9,7 @@ use docracy_core::ids::{DocumentId, RevisionId};
 use docracy_core::query::QueryInput;
 use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{
-    create_document, init_bundle, query_documents, read_documents, update_document,
+    create_document, init_bundle_scoped, query_documents, read_documents, update_document,
     UpdateDocumentInput,
 };
 use docracy_postgres::PgRepository;
@@ -184,7 +184,15 @@ async fn run() -> Result<()> {
 
         Command::Init {} => {
             let governance = FsGovernanceSource::repo_owned();
-            let out = init_bundle(&mut repo, &governance, &clock, &ids).await?;
+            let task_scope = normalize_task_scope(std::env::var("DOCRACY_TASK_SCOPE").ok());
+            let out = init_bundle_scoped(
+                &mut repo,
+                &governance,
+                &clock,
+                &ids,
+                task_scope.as_deref(),
+            )
+            .await?;
 
             let governance_files: Vec<Value> = out
                 .governance
@@ -196,6 +204,8 @@ async fn run() -> Result<()> {
             json!({
                 "governance": {"files": governance_files},
                 "context_documents": out.context_documents,
+                "task_scope": out.task_scope,
+                "task_context_documents": out.task_context_documents,
             })
         }
 
@@ -275,6 +285,13 @@ fn print_json(v: Value, pretty: bool) -> Result<()> {
     };
     println!("{s}");
     Ok(())
+}
+
+fn normalize_task_scope(raw: Option<String>) -> Option<String> {
+    raw.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
 }
 
 fn resolve_workspace_id(input: Option<&str>) -> Result<Uuid> {
@@ -450,5 +467,23 @@ mod tests {
         let nil = Uuid::nil().to_string();
         let err = resolve_workspace_id(Some(&nil)).unwrap_err();
         assert!(err.to_string().contains("nil"));
+    }
+
+    #[test]
+    fn normalize_task_scope_trims_whitespace() {
+        assert_eq!(
+            normalize_task_scope(Some("  planning  ".to_string())),
+            Some("planning".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_task_scope_treats_whitespace_only_as_none() {
+        assert_eq!(normalize_task_scope(Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn normalize_task_scope_preserves_missing_values() {
+        assert_eq!(normalize_task_scope(None), None);
     }
 }
