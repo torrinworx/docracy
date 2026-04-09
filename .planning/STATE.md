@@ -4,11 +4,11 @@ milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
 stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-04-08T22:43:23.547Z"
+last_updated: "2026-04-09T04:19:13.571Z"
 progress:
-  total_phases: 12
+  total_phases: 13
   completed_phases: 10
-  total_plans: 18
+  total_plans: 21
   completed_plans: 19
 ---
 
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 09 — cli-workspace-create-command
+**Current focus:** Phase 10 — task-scoped-init-contexts
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
+Phase: 10 (task-scoped-init-contexts) — EXECUTING
+Plan: 1 of 3
 
 ## Performance Metrics
 
@@ -145,6 +145,7 @@ Recent decisions affecting current work:
 - Craft launch marketing plan
 - Add MCP server to local opencode
 - Make governance path repo-defined in opencode config
+- Refresh README usage docs
 
 ### Blockers/Concerns
 
