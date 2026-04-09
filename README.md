@@ -11,7 +11,8 @@ Docracy v1.0 is the Postgres-backed document store, revision model, test harness
 - Init/Create/Read/Query/Update are implemented.
 - Documents have `type`, `status`, timestamps, `content`, `extensions`, and a current revision head.
 - Updates create immutable revisions and require `expected_revision` so stale writes fail.
-- `Init` returns the repo-owned `./governance` markdown files and active `context` documents created by other agents.
+- `Init` returns the repo-owned `./governance` markdown files and all active `context` documents created by other agents.
+- `Init` can also expose an additive task-scoped subset via `DOCRACY_TASK_SCOPE` without changing the meaning of active context documents.
 - Postgres migrations, full-text content search, filtering, ordering, pagination, and tests are in place.
 
 Future ideas and non-finalized notes are kept separate below so the current v1 behavior is easy to read.
@@ -21,6 +22,12 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 ### Shipped in v1
 
 - **Init**, to agents: 'load this to learn how the system works.' In v1 this returns the repo-owned `./governance` markdown files, as well as any active `type = context` documents found in the database that are not archived or deleted. It also ensures the stored governance document matches the repo copy.
+
+  Optional task scoping uses `DOCRACY_TASK_SCOPE` (whitespace trimmed; empty treated as unset). When present, the CLI emits two additive fields:
+  - `task_scope`: the normalized scope string or `null`
+  - `task_context_documents`: `[]` when `task_scope` is `null`; otherwise the scoped subset of active contexts
+
+  The scoped subset includes unscoped contexts (those without `extensions.task_scopes`) plus any context whose `extensions.task_scopes` array contains the requested scope string. This does not change the base `context_documents` contract.
 - **Create**, allows agents to create a refined document, pass it in, and store it in the PostgreSQL document DB.
 - **Read**, this fetches the full contents of current documents by id.
 - **Query**, an SQL-style `SELECT`, `WHERE`, `ORDER BY`, `LIMIT` tool for current documents. Keyword search runs over document content. Extension-field search (`extensions.*`) is intentionally deferred/unsupported in v1.
@@ -90,6 +97,8 @@ extensions: {
 
 In v1 these are stored and returned, but extension-field search/filtering is deferred until governance defines a policy.
 
+Task-scoped init contexts use `extensions.task_scopes` as an array of strings to opt documents into specialty init bundles.
+
 ### Future ideas
 
 The goal with these is to extend the document system so that LLMs can attach repository/task metadata that later phases may choose to index and query.
@@ -120,7 +129,7 @@ Current document shape:
   type: 'governance | context | general | ...',
   content: '...', // any non-null JSON
   extensions: {
-    // extensions
+    // extensions, including optional task-scoping metadata like task_scopes: ['planning']
   }
 }
 ```
