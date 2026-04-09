@@ -102,7 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Custom SQL Query Strings | 0/2 | Planned | - |
 | 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
-| 10. Task-scoped init contexts | 1/3 | In Progress|  |
+| 10. Task-scoped init contexts | 2/3 | In Progress|  |
 
 ## Archived Milestones
 
@@ -155,11 +155,11 @@ Plans:
 **Goal**: Init remains contract-preserving (returns all active `context` docs) while also returning an additive task-scoped subset derived from `extensions.task_scopes` so agents can request a specialty init context without new tools.
 **Requirements**: TBD
 **Depends on:** Phase 9
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 10-01-PLAN.md — Core: compute and return task-scoped context subset (without filtering active contexts)
-- [ ] 10-02-PLAN.md — CLI: wire DOCRACY_TASK_SCOPE and document Init output
+- [x] 10-02-PLAN.md — CLI: wire DOCRACY_TASK_SCOPE and document Init output
 - [ ] 10-03-PLAN.md — MCP: runtime task scope + Init tool output + MCP docs
 
 ### Phase 11: Refresh README usage docs
