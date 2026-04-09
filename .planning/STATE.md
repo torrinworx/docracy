@@ -134,6 +134,7 @@ Recent decisions affecting current work:
 - Phase 7 added: Custom SQL Query Strings.
 - Phase 7 refined: single `sql` field, guided fallback, read-only raw-table execution, and server-enforced timeout/row ceilings.
 - Phase 8 added: Workspace tenancy with generated workspace IDs, explicit MCP session binding through project-scoped client config, and Postgres RLS isolation.
+- Phase 10 added: Task-scoped init contexts.
 
 ### Pending Todos
 

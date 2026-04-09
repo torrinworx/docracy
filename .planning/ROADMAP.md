@@ -89,7 +89,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -102,6 +102,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Custom SQL Query Strings | 0/2 | Planned | - |
 | 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
+| 10. Task-scoped init contexts | 0/3 | Planned | - |
 
 ## Archived Milestones
 
@@ -148,3 +149,15 @@ Plans:
 
 Plans:
 - [x] 09-01: Workspace create CLI, Postgres helper, and docs/tests
+
+### Phase 10: Task-scoped init contexts
+
+**Goal**: Init remains contract-preserving (returns all active `context` docs) while also returning an additive task-scoped subset derived from `extensions.task_scopes` so agents can request a specialty init context without new tools.
+**Requirements**: TBD
+**Depends on:** Phase 9
+**Plans:** 3 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — Core: compute and return task-scoped context subset (without filtering active contexts)
+- [ ] 10-02-PLAN.md — CLI: wire DOCRACY_TASK_SCOPE and document Init output
+- [ ] 10-03-PLAN.md — MCP: runtime task scope + Init tool output + MCP docs
