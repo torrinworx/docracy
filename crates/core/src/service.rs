@@ -3,7 +3,7 @@ use crate::errors::CoreError;
 use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
 use crate::query::{
-    encode_cursor, project_rows, GuidedQueryInput, QueryExecution, QueryInput, QueryResult,
+    GuidedQueryInput, QueryExecution, QueryInput, QueryResult, encode_cursor, project_rows,
 };
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
@@ -290,6 +290,8 @@ async fn update_document_internal(
 pub struct InitBundleResult {
     pub governance: GovernanceBundle,
     pub context_documents: Vec<Document>,
+    pub task_scope: Option<String>,
+    pub task_context_documents: Vec<Document>,
 }
 
 pub async fn init_bundle(
@@ -297,6 +299,16 @@ pub async fn init_bundle(
     governance: &dyn GovernanceSource,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
+) -> Result<InitBundleResult, CoreError> {
+    init_bundle_scoped(repo, governance, clock, ids, None).await
+}
+
+pub async fn init_bundle_scoped(
+    repo: &mut dyn Repository,
+    governance: &dyn GovernanceSource,
+    clock: &dyn Clock,
+    ids: &dyn IdGenerator,
+    task_scope: Option<&str>,
 ) -> Result<InitBundleResult, CoreError> {
     let bundle = governance.load_bundle()?;
 
@@ -310,10 +322,32 @@ pub async fn init_bundle(
     reconcile_governance(repo, clock, ids, &governance_md).await?;
 
     let context_documents = repo.list_active_context_documents().await?;
+    let (task_scope, task_context_documents) = match task_scope {
+        None => (None, Vec::new()),
+        Some(scope) => {
+            let task_context_documents = context_documents
+                .iter()
+                .filter(|doc| matches_task_scope(doc, scope))
+                .cloned()
+                .collect();
+            (Some(scope.to_string()), task_context_documents)
+        }
+    };
+
     Ok(InitBundleResult {
         governance: bundle,
         context_documents,
+        task_scope,
+        task_context_documents,
     })
+}
+
+fn matches_task_scope(doc: &Document, scope: &str) -> bool {
+    match doc.extensions.get("task_scopes") {
+        None => true,
+        Some(Value::Array(scopes)) => scopes.iter().any(|value| value.as_str() == Some(scope)),
+        Some(_) => false,
+    }
 }
 
 async fn reconcile_governance(
@@ -414,11 +448,11 @@ async fn reconcile_governance(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DocumentType;
+    use crate::QueryInput;
     use crate::memory::MemoryRepository;
     use crate::query::{DocumentQuery, DocumentQueryResult, RawQueryInput, RawQueryResult};
     use crate::repository::Repository;
-    use crate::DocumentType;
-    use crate::QueryInput;
     use chrono::TimeZone;
     use serde_json::json;
     use serde_json::{Map, Value};
@@ -512,6 +546,38 @@ mod tests {
                 superseded_at: None,
                 content,
                 extensions: Extensions::new(),
+            };
+            (document, revision)
+        }
+
+        pub(super) fn context_document(
+            id: DocumentId,
+            revision_id: RevisionId,
+            created_at: DateTime<Utc>,
+            content: Value,
+            extensions: Extensions,
+        ) -> (Document, DocumentRevision) {
+            let document = Document {
+                id,
+                doc_type: DocumentType::new(DocumentType::CONTEXT).unwrap(),
+                status: DocumentStatus::active(),
+                created_at,
+                modified_at: created_at,
+                current_revision_id: Some(revision_id),
+                archived_at: None,
+                deleted_at: None,
+                content: content.clone(),
+                extensions: extensions.clone(),
+            };
+            let revision = DocumentRevision {
+                id: revision_id,
+                document_id: id,
+                version: 1,
+                parent_revision_id: None,
+                created_at,
+                superseded_at: None,
+                content,
+                extensions,
             };
             (document, revision)
         }
@@ -618,7 +684,7 @@ mod tests {
         }
     }
 
-    use fixtures::{seeded_document, FixedClock, FixedIds, SeqIds};
+    use fixtures::{FixedClock, FixedIds, SeqIds, seeded_document};
 
     #[tokio::test(flavor = "current_thread")]
     async fn create_then_update_creates_revision_chain() {
@@ -743,6 +809,133 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(rev.version, 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_bundle_scoped_returns_empty_task_subset_without_scope() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello governance").unwrap();
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let ids = FixedIds {
+            doc: DocumentId(Uuid::from_u128(90)),
+            revs: vec![RevisionId(Uuid::from_u128(91))],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let docs = [
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(40)),
+                RevisionId(Uuid::from_u128(50)),
+                t0,
+                json!({"kind": "unscoped"}),
+                Extensions::new(),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(41)),
+                RevisionId(Uuid::from_u128(51)),
+                t0,
+                json!({"kind": "planning"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["planning"]))]),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(42)),
+                RevisionId(Uuid::from_u128(52)),
+                t0,
+                json!({"kind": "execution"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["execution"]))]),
+            ),
+        ];
+        for (document, revision) in docs {
+            repo.create_document_with_revision(document, revision)
+                .await
+                .unwrap();
+        }
+
+        let out = init_bundle_scoped(&mut repo, &governance, &FixedClock(t0), &ids, None)
+            .await
+            .unwrap();
+
+        assert_eq!(out.context_documents.len(), 3);
+        assert_eq!(out.task_scope, None);
+        assert!(out.task_context_documents.is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_bundle_scoped_filters_task_contexts_by_scope() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello governance").unwrap();
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let ids = FixedIds {
+            doc: DocumentId(Uuid::from_u128(100)),
+            revs: vec![RevisionId(Uuid::from_u128(101))],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let context_docs = vec![
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(60)),
+                RevisionId(Uuid::from_u128(70)),
+                t0,
+                json!({"kind": "unscoped"}),
+                Extensions::new(),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(61)),
+                RevisionId(Uuid::from_u128(71)),
+                t0,
+                json!({"kind": "planning"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["planning"]))]),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(62)),
+                RevisionId(Uuid::from_u128(72)),
+                t0,
+                json!({"kind": "execution"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["execution"]))]),
+            ),
+        ];
+        for (document, revision) in context_docs {
+            repo.create_document_with_revision(document, revision)
+                .await
+                .unwrap();
+        }
+
+        let out = init_bundle_scoped(
+            &mut repo,
+            &governance,
+            &FixedClock(t0),
+            &ids,
+            Some("planning"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(out.context_documents.len(), 3);
+        assert_eq!(out.task_scope, Some("planning".to_string()));
+        assert_eq!(out.task_context_documents.len(), 2);
+        assert!(
+            out.task_context_documents
+                .iter()
+                .any(|doc| doc.content == json!({"kind": "unscoped"}))
+        );
+        assert!(
+            out.task_context_documents
+                .iter()
+                .any(|doc| doc.content == json!({"kind": "planning"}))
+        );
+        assert!(
+            !out.task_context_documents
+                .iter()
+                .any(|doc| doc.content == json!({"kind": "execution"}))
+        );
     }
 
     #[tokio::test(flavor = "current_thread")]
