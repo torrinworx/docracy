@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-04-09T04:19:13.571Z"
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-04-09T04:22:47.374Z"
 progress:
-  total_phases: 13
+  total_phases: 14
   completed_phases: 10
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 Phase: 10 (task-scoped-init-contexts) — EXECUTING
-Plan: 1 of 3
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -65,6 +65,7 @@ Plan: 1 of 3
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P01 | 20 min | 2 tasks | 4 files |
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P02 | 35 min | 3 tasks | 8 files |
 | Phase 09-cli-workspace-create-command P01 | 59 min | 2 tasks | 9 files |
+| Phase 10-task-scoped-init-contexts P01 | 18 min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -119,6 +120,8 @@ Recent decisions affecting current work:
 - [Phase 09-cli-workspace-create-command]: Keep workspace provisioning CLI-only and return the created UUID as JSON on stdout
 - [Phase 09-cli-workspace-create-command]: Reject malformed and nil workspace IDs before connecting to Postgres so invalid input fails fast with structured validation errors
 - [Phase 09-cli-workspace-create-command]: Persist workspaces through PgRepository instead of embedding raw SQL in the CLI
+- [Phase 10-task-scoped-init-contexts]: Preserve the existing init contract by keeping context_documents as the full active context set and adding task_context_documents as an opt-in subset.
+- [Phase 10-task-scoped-init-contexts]: Use extensions.task_scopes as the only task selector so specialty init contexts stay data-driven and do not require a new tool surface.
 
 ### Milestone Setup
 
@@ -135,6 +138,7 @@ Recent decisions affecting current work:
 - Phase 7 refined: single `sql` field, guided fallback, read-only raw-table execution, and server-enforced timeout/row ceilings.
 - Phase 8 added: Workspace tenancy with generated workspace IDs, explicit MCP session binding through project-scoped client config, and Postgres RLS isolation.
 - Phase 10 added: Task-scoped init contexts.
+- Phase 11 added: Refresh README usage docs.
 
 ### Pending Todos
 
@@ -154,6 +158,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-08T22:40:24.709Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-04-09T04:22:47.372Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None
