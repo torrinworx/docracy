@@ -63,7 +63,7 @@ completed: 2026-04-10
 2. **Task 2: Add the embedding job queue and enqueue path** - `0d5b9a2` (feat)
 3. **Task 3: Prove queue overwrite and retryable snapshot behavior** - `b51fbc6` (feat)
 
-**Plan metadata:** `pending` (docs)
+**Plan metadata:** `09edc74` (docs)
 
 ## Files Created/Modified
 - `crates/core/src/vector.rs` - embedding job record and canonical source text helper
