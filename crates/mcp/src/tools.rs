@@ -191,6 +191,7 @@ pub struct ReadArgs {
 pub struct QueryArgs {
     pub query: Option<String>,
     pub sql: Option<String>,
+    pub embedding: Option<Vec<f32>>,
     pub timeout_ms: Option<u64>,
 
     #[serde(rename = "where", default)]
@@ -233,6 +234,7 @@ impl QueryArgs {
         docracy_core::query::QueryInput {
             query: self.query,
             sql: self.sql,
+            embedding: self.embedding,
             timeout_ms: self.timeout_ms,
             where_: self.where_.into_iter().collect(),
             order_by: self

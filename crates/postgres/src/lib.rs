@@ -414,14 +414,6 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
             }
         })?;
 
-        if let Some(record) = vector_mirror_record_from_document(
-            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
-            &doc,
-            rev.id,
-        )? {
-            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
-        }
-
         sqlx::query(
             r#"
 INSERT INTO document_revisions (
@@ -447,6 +439,14 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 map_sqlx_error(e)
             }
         })?;
+
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            rev.id,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
 
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())

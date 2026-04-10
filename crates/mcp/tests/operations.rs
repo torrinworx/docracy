@@ -34,6 +34,7 @@ async fn query_documents_delegates_to_core() {
         docracy_core::QueryInput {
             query: None,
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_: Map::new(),
             order_by: vec![],

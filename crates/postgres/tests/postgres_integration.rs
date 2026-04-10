@@ -905,6 +905,79 @@ async fn vector_search_excludes_archived_documents_from_results() {
 }
 
 #[tokio::test]
+async fn vector_mirror_flush_and_search_against_live_qdrant() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let qdrant_url = std::env::var("QDRANT_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:6333".to_string())
+        .trim_end_matches('/')
+        .to_string();
+
+    let workspace = Uuid::from_u128(0xD4);
+    let doc_id = docracy_core::DocumentId(Uuid::from_u128(0xD40));
+    let rev_id = docracy_core::RevisionId(Uuid::from_u128(0xD41));
+
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = FixedIds {
+        doc: doc_id,
+        revs: vec![rev_id],
+        idx: std::cell::Cell::new(0),
+    };
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"state": "live"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.11, 0.22, 0.33]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    repo.flush_vector_mirror_queue().await.unwrap();
+
+    let collection = format!("docracy_workspace_{}", workspace);
+    let response = reqwest::Client::new()
+        .get(format!("{qdrant_url}/collections/{collection}"))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+
+    let out = query_documents(
+        &repo,
+        QueryInput {
+            query: None,
+            sql: None,
+            embedding: Some(vec![0.11, 0.22, 0.33]),
+            timeout_ms: None,
+            where_: Map::new(),
+            order_by: vec![],
+            select: vec!["id".to_string()],
+            limit: Some(10),
+            cursor: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(out.rows[0].get("id"), Some(&json!(created.document.id.to_string())));
+}
+
+#[tokio::test]
 async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     let Some(url) = database_url() else {
         return;

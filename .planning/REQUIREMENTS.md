@@ -52,6 +52,10 @@
 - [x] **GOV-07**: CLI and MCP startup always load the repo-owned `./governance` bundle and do not accept arbitrary governance-directory overrides.
 - [x] **DOC-03**: Public docs explain the governance document type and the fixed `./governance` startup path.
 
+### Vector Mirroring
+
+- [x] **VEC-01**: Workspace-scoped vector mirroring and hybrid retrieval keep Postgres as source of truth while mirroring current document revisions into Qdrant for vector search.
+
 ## Deferred / Out of Scope for v1.1
 
 Explicitly excluded to keep the milestone focused on the first MCP interface layer.
@@ -93,12 +97,13 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | GOV-06 | Phase 5 | Planned |
 | GOV-07 | Phase 5 | Planned |
 | DOC-03 | Phase 5 | Planned |
+| VEC-01 | Phase 12 | Complete |
 
 **Coverage:**
-- v1.1 requirements: 25 total
-- Mapped to phases: 25
+- v1.1 requirements: 26 total
+- Mapped to phases: 26
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-06*
-*Last updated: 2026-04-06 after milestone definition*
+*Last updated: 2026-04-10 after phase 12*
