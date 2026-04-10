@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 12-01-PLAN.md
-last_updated: "2026-04-10T03:11:34.960Z"
+stopped_at: Completed 12-02-PLAN.md
+last_updated: "2026-04-10T03:33:50.709Z"
 progress:
   total_phases: 15
-  completed_phases: 12
+  completed_phases: 13
   total_plans: 25
-  completed_plans: 25
+  completed_plans: 26
 ---
 
 # Project State
@@ -71,6 +71,7 @@ Plan: 2 of 2
 | Phase 11 P01 | 12 min | 1 tasks | 1 files |
 | Phase 11 P02 | 11 min | 1 tasks | 1 files |
 | Phase 12-vector-mirror-helper-and-vector-query-support P01 | 6 min | 3 tasks | 5 files |
+| Phase 12-vector-mirror-helper-and-vector-query-support P02 | 22 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -137,6 +138,9 @@ Recent decisions affecting current work:
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Use extensions.embedding as the opt-in payload carrier so the core document model stays unchanged.
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep mirror rows current-only with (workspace_id, document_id) as the unique key.
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Store embedding payloads as JSONB arrays plus an explicit dimension column for later Qdrant dispatch.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Use workspace-scoped Qdrant collections keyed by document id so vector points overwrite cleanly instead of accumulating stale embeddings.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Treat Postgres as canonical for filtering and hydration; Qdrant only supplies ranked ids.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep archive/deleted state authoritative in Postgres and mirror it into vector payloads for regression checks.
 
 ### Milestone Setup
 
@@ -176,6 +180,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-10T03:11:11.984Z
-Stopped at: Completed 12-01-PLAN.md
+Last session: 2026-04-10T03:33:50.706Z
+Stopped at: Completed 12-02-PLAN.md
 Resume file: None

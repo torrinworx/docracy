@@ -104,7 +104,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
 | 10. Task-scoped init contexts | 3/3 | Complete    | 2026-04-09 |
 | 11. Refresh README usage docs | 2/2 | Complete   | 2026-04-09 |
-| 12. Vector mirror helper and vector query support | 1/2 | In Progress|  |
+| 12. Vector mirror helper and vector query support | 2/2 | Complete   | 2026-04-10 |
 
 ## Archived Milestones
 
@@ -180,8 +180,8 @@ Plans:
 **Goal**: Postgres remains the source of truth while workspace-scoped vector snapshots are mirrored into Qdrant, archive/delete state stays aligned in both stores, and vector queries return only the active workspace's current documents.
 **Requirements**: VEC-01
 **Depends on:** Phase 11
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 12-01: Define vector mirror contract and Postgres queue for Qdrant sync
-- [ ] 12-02: Add Qdrant dispatch, vector query hydration, and archive/workspace regression coverage
+- [x] 12-02: Add Qdrant dispatch, vector query hydration, and archive/workspace regression coverage
