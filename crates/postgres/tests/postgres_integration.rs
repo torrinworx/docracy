@@ -10,6 +10,7 @@ use docracy_postgres::PgRepository;
 use serde_json::json;
 use serde_json::Map;
 use sqlx::postgres::PgPoolOptions;
+use sqlx::types::chrono::{DateTime, Utc};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -345,6 +346,96 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         &json!(DocumentStatus::ARCHIVED)
     );
     assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct VectorMirrorQueueRow {
+    workspace_id: Uuid,
+    document_id: Uuid,
+    revision_id: Uuid,
+    archived_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    embedding_dimension: i32,
+    embedding: serde_json::Value,
+}
+
+async fn vector_mirror_queue_rows(repo: &PgRepository, document_id: Uuid) -> Vec<VectorMirrorQueueRow> {
+    sqlx::query_as::<_, VectorMirrorQueueRow>(
+        r#"
+SELECT workspace_id, document_id, revision_id, archived_at, deleted_at, embedding_dimension, embedding
+FROM vector_mirror_queue
+WHERE document_id = $1
+ORDER BY workspace_id ASC
+        "#,
+    )
+    .bind(document_id)
+    .fetch_all(repo.pool())
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn vector_mirror_queue_tracks_current_snapshot_in_place() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_id = Uuid::new_v4();
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace_id).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"body": "alpha"}),
+            extensions: serde_json::Map::from_iter([( 
+                "embedding".to_string(),
+                json!([0.25, 0.5, 0.75]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].workspace_id, workspace_id);
+    assert_eq!(rows[0].document_id, created.document.id.0);
+    assert_eq!(rows[0].revision_id, created.revision.id.0);
+    assert_eq!(rows[0].embedding_dimension, 3);
+
+    let updated = update_document(
+        &mut repo,
+        &clock,
+        &ids,
+        UpdateDocumentInput {
+            id: created.document.id,
+            expected_head: created.revision.id,
+            content: Some(json!({"body": "beta"})),
+            extensions: Some(serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([1.0, 2.0, 3.0, 4.0]),
+            )])),
+            status: Some(DocumentStatus::ARCHIVED.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].revision_id, updated.new_revision.id.0);
+    assert!(rows[0].archived_at.is_some());
+    assert!(rows[0].deleted_at.is_none());
+    assert_eq!(rows[0].embedding_dimension, 4);
+    assert_eq!(rows[0].embedding, json!([1.0, 2.0, 3.0, 4.0]));
 }
 
 #[tokio::test]

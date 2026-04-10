@@ -9,6 +9,7 @@ use docracy_core::query::{
 };
 use docracy_core::repository::Repository;
 use docracy_core::revision::DocumentRevision;
+use docracy_core::VectorMirrorRecord;
 use serde_json::{Map, Value};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::types::chrono::{DateTime, Utc};
@@ -99,7 +100,12 @@ VALUES ($1)
 
 #[cfg(test)]
 mod tests {
+    use super::vector_mirror_record_from_document;
     use super::validate_workspace_id;
+    use chrono::{TimeZone, Utc};
+    use docracy_core::document::{DocumentStatus, DocumentType};
+    use docracy_core::{Document, DocumentId, RevisionId};
+    use serde_json::json;
     use docracy_core::errors::RepoError;
     use uuid::Uuid;
 
@@ -109,6 +115,37 @@ mod tests {
             validate_workspace_id(Uuid::nil()),
             Err(RepoError::Storage(message)) if message.contains("nil UUID")
         ));
+    }
+
+    #[test]
+    fn vector_mirror_record_uses_embedding_payload_when_present() {
+        let document = Document {
+            id: DocumentId(Uuid::new_v4()),
+            doc_type: DocumentType::new("general").unwrap(),
+            status: DocumentStatus::active(),
+            created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            modified_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            current_revision_id: Some(RevisionId(Uuid::new_v4())),
+            archived_at: None,
+            deleted_at: None,
+            content: json!({"body": "alpha"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.1, 0.2, 0.3]),
+            )]),
+        };
+
+        let record = vector_mirror_record_from_document(
+            Uuid::new_v4(),
+            &document,
+            RevisionId(Uuid::new_v4()),
+        )
+        .expect("embedding should produce a mirror record");
+
+        let record = record.expect("embedding should produce a mirror record");
+
+        assert_eq!(record.document_id, document.id);
+        assert_eq!(record.embedding_dimension(), 3);
     }
 }
 
@@ -223,6 +260,88 @@ fn extensions_as_value(ext: &Map<String, Value>) -> Value {
     Value::Object(ext.clone())
 }
 
+fn vector_embedding_from_value(value: &Value) -> Result<Vec<f32>, RepoError> {
+    let Value::Array(items) = value else {
+        return Err(RepoError::Storage(
+            "vector embedding payload must be a JSON array".to_string(),
+        ));
+    };
+
+    let mut embedding = Vec::with_capacity(items.len());
+    for item in items {
+        let Some(n) = item.as_f64() else {
+            return Err(RepoError::Storage(
+                "vector embedding payload must contain only numbers".to_string(),
+            ));
+        };
+        embedding.push(n as f32);
+    }
+
+    if embedding.is_empty() {
+        return Err(RepoError::Storage(
+            "vector embedding payload must not be empty".to_string(),
+        ));
+    }
+
+    Ok(embedding)
+}
+
+fn vector_mirror_record_from_document(
+    workspace_id: WorkspaceUuid,
+    document: &Document,
+    revision_id: RevisionId,
+) -> Result<Option<VectorMirrorRecord>, RepoError> {
+    let Some(embedding_value) = document.extensions.get("embedding") else {
+        return Ok(None);
+    };
+
+    let embedding = vector_embedding_from_value(embedding_value)?;
+    Ok(Some(VectorMirrorRecord {
+        workspace_id,
+        document_id: document.id,
+        revision_id,
+        archived_at: document.archived_at,
+        deleted_at: document.deleted_at,
+        embedding,
+    }))
+}
+
+async fn enqueue_vector_mirror_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    record: &VectorMirrorRecord,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        r#"
+INSERT INTO vector_mirror_queue (
+  workspace_id, document_id, revision_id, archived_at, deleted_at,
+  embedding_dimension, embedding, created_at, modified_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7, now(), now())
+ON CONFLICT (workspace_id, document_id) DO UPDATE SET
+  revision_id = EXCLUDED.revision_id,
+  archived_at = EXCLUDED.archived_at,
+  deleted_at = EXCLUDED.deleted_at,
+  embedding_dimension = EXCLUDED.embedding_dimension,
+  embedding = EXCLUDED.embedding,
+  modified_at = now()
+        "#,
+    )
+    .bind(record.workspace_id)
+    .bind(record.document_id.0)
+    .bind(record.revision_id.0)
+    .bind(record.archived_at)
+    .bind(record.deleted_at)
+    .bind(i32::try_from(record.embedding_dimension()).map_err(|_| {
+        RepoError::Storage("vector embedding dimension out of range".to_string())
+    })?)
+    .bind(serde_json::to_value(&record.embedding).map_err(|e| RepoError::Storage(e.to_string()))?)
+    .execute(tx.as_mut())
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(())
+}
+
 fn version_to_i32(version: u32) -> Result<i32, RepoError> {
     i32::try_from(version)
         .map_err(|_| RepoError::Storage("revision version out of range".to_string()))
@@ -279,7 +398,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
         .execute(&mut *tx)
         .await
@@ -290,6 +409,14 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
                 map_sqlx_error(e)
             }
         })?;
+
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            rev.id,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
 
         sqlx::query(
             r#"
@@ -399,6 +526,14 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         .await
         .map_err(map_sqlx_error)?;
 
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            new_rev.id,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
+
         let updated = sqlx::query(
             r#"
 UPDATE documents
@@ -423,7 +558,7 @@ WHERE id = $1
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
         .execute(&mut *tx)
         .await
@@ -438,6 +573,7 @@ WHERE id = $1
     }
 
     async fn update_document(&mut self, doc: Document) -> Result<(), RepoError> {
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         let updated = sqlx::query(
             r#"
 UPDATE documents
@@ -462,15 +598,27 @@ WHERE id = $1
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(map_sqlx_error)?
         .rows_affected();
         if updated != 1 {
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
+
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            doc.current_revision_id.ok_or_else(|| {
+                RepoError::Storage("document missing current revision".to_string())
+            })?,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 
