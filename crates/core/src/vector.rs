@@ -3,7 +3,23 @@ use crate::ids::{DocumentId, RevisionId};
 use crate::query::DocumentQuery;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
+
+pub fn canonical_embedding_source_text(value: &Value) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| "null".to_string())
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EmbeddingJobRecord {
+    pub workspace_id: Uuid,
+    pub document_id: DocumentId,
+    pub revision_id: RevisionId,
+    pub embed_model: String,
+    pub source_text: String,
+    pub archived_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VectorMirrorRecord {
@@ -70,6 +86,7 @@ mod tests {
     use crate::document::DocumentType;
     use crate::query::DocumentQueryOrder;
     use chrono::TimeZone;
+    use serde_json::json;
 
     #[test]
     fn mirror_records_carry_snapshot_identity_and_embedding() {
@@ -109,5 +126,34 @@ mod tests {
         assert_eq!(input.query, query);
         assert_eq!(input.embedding_dimension(), 2);
         assert!(input.is_active_only());
+    }
+
+    #[test]
+    fn embedding_job_record_carries_workspace_document_revision_model_and_tombstones() {
+        let record = EmbeddingJobRecord {
+            workspace_id: Uuid::new_v4(),
+            document_id: DocumentId(Uuid::new_v4()),
+            revision_id: RevisionId(Uuid::new_v4()),
+            embed_model: "embeddinggemma".to_string(),
+            source_text: canonical_embedding_source_text(&json!({"body": "alpha"})),
+            archived_at: Some(Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap()),
+            deleted_at: None,
+        };
+
+        assert_eq!(record.embed_model, "embeddinggemma");
+        assert!(record.source_text.contains("alpha"));
+        assert!(record.archived_at.is_some());
+        assert!(record.deleted_at.is_none());
+    }
+
+    #[test]
+    fn canonical_embedding_source_text_is_stable_for_the_same_value() {
+        let value = json!({"a": 1, "b": [true, false]});
+
+        let first = canonical_embedding_source_text(&value);
+        let second = canonical_embedding_source_text(&value);
+
+        assert_eq!(first, second);
+        assert_eq!(first, "{\"a\":1,\"b\":[true,false]}");
     }
 }
