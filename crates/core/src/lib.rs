@@ -8,6 +8,7 @@ pub mod memory;
 pub mod query;
 pub mod repository;
 pub mod revision;
+pub mod vector;
 pub mod service;
 pub mod validation;
 
@@ -22,6 +23,7 @@ pub use query::{
 };
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};
+pub use vector::{VectorMirrorRecord, VectorQueryInput};
 pub use service::{
     create_document, init_bundle, init_bundle_scoped, query_documents, read_documents,
     update_document, CreateDocumentResult, InitBundleResult, ReadDocumentsResult,
