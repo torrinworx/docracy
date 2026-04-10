@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
-current_plan: 2
-status: ready_for_verification
-stopped_at: Completed 11-02-PLAN.md
-last_updated: "2026-04-09T13:25:12.728Z"
+status: unknown
+stopped_at: Completed 12-01-PLAN.md
+last_updated: "2026-04-10T03:11:34.960Z"
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 12
-  total_plans: 23
-  completed_plans: 24
+  total_plans: 25
+  completed_plans: 25
 ---
 
 # Project State
@@ -20,14 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 11 — refresh-readme-usage-docs
+**Current focus:** Phase 12 — vector-mirror-helper-and-vector-query-support
 
 ## Current Position
 
-Phase: 11
-Plan: Complete
-Current Plan: 2
-Total Plans in Phase: 2
+Phase: 12 (vector-mirror-helper-and-vector-query-support) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -73,6 +70,7 @@ Total Plans in Phase: 2
 | Phase 10-task-scoped-init-contexts P03 | 3 min | 2 tasks | 6 files |
 | Phase 11 P01 | 12 min | 1 tasks | 1 files |
 | Phase 11 P02 | 11 min | 1 tasks | 1 files |
+| Phase 12-vector-mirror-helper-and-vector-query-support P01 | 6 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -136,6 +134,9 @@ Recent decisions affecting current work:
 - [Phase 10-task-scoped-init-contexts]: Preserve context_documents as the full active set and add task_context_documents as an additive subset.
 - [Phase 11]: State the current milestone as v1.1 MCP Server Interface instead of v1.0
 - [Phase 11]: Document DOCRACY_TASK_SCOPE as optional and additive rather than a replacement for context_documents
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Use extensions.embedding as the opt-in payload carrier so the core document model stays unchanged.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep mirror rows current-only with (workspace_id, document_id) as the unique key.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Store embedding payloads as JSONB arrays plus an explicit dimension column for later Qdrant dispatch.
 
 ### Milestone Setup
 
@@ -153,6 +154,7 @@ Recent decisions affecting current work:
 - Phase 8 added: Workspace tenancy with generated workspace IDs, explicit MCP session binding through project-scoped client config, and Postgres RLS isolation.
 - Phase 10 added: Task-scoped init contexts.
 - Phase 11 added: Refresh README usage docs.
+- Phase 12 added: Vector mirror helper and vector query support.
 
 ### Pending Todos
 
@@ -169,9 +171,11 @@ Recent decisions affecting current work:
 
 - `gsd-tools` phase lookup currently resolves `01` to the archived v1.0 phase directory, so future `/gsd-* phase 1` commands need a milestone-aware fix or manual path awareness.
 - Plan-local requirement IDs WS-02 and WS-04 were not present in .planning/REQUIREMENTS.md, so automatic requirement marking skipped.
+- DOCRACY_TEST_DATABASE_URL was not available in the local environment, so live Postgres integration verification for the vector queue skipped and must be rerun with a database URL.
+- Plan requirement VEC-01 was not present in .planning/REQUIREMENTS.md, so automatic requirement marking could not update the traceability table.
 
 ## Session Continuity
 
-Last session: 2026-04-09T13:24:56.683Z
-Stopped at: Completed 11-02-PLAN.md
+Last session: 2026-04-10T03:11:11.984Z
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
