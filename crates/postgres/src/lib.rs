@@ -11,7 +11,7 @@ use docracy_core::query::{
 };
 use docracy_core::repository::Repository;
 use docracy_core::revision::DocumentRevision;
-use docracy_core::VectorMirrorRecord;
+use docracy_core::{canonical_embedding_source_text, EmbeddingJobRecord, VectorMirrorRecord};
 use serde_json::{Map, Value};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::types::chrono::{DateTime, Utc};
@@ -23,6 +23,7 @@ pub use vector::qdrant_collection_name;
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
 const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
+const DEFAULT_EMBED_MODEL: &str = "embeddinggemma";
 
 fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
     if id.is_nil() {
@@ -310,6 +311,23 @@ fn vector_mirror_record_from_document(
     }))
 }
 
+fn embedding_job_record_from_document(
+    workspace_id: WorkspaceUuid,
+    document: &Document,
+    revision_id: RevisionId,
+    embed_model: &str,
+) -> EmbeddingJobRecord {
+    EmbeddingJobRecord {
+        workspace_id,
+        document_id: document.id,
+        revision_id,
+        embed_model: embed_model.to_string(),
+        source_text: canonical_embedding_source_text(&document.content),
+        archived_at: document.archived_at,
+        deleted_at: document.deleted_at,
+    }
+}
+
 async fn enqueue_vector_mirror_snapshot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     record: &VectorMirrorRecord,
@@ -339,6 +357,44 @@ ON CONFLICT (workspace_id, document_id) DO UPDATE SET
         RepoError::Storage("vector embedding dimension out of range".to_string())
     })?)
     .bind(serde_json::to_value(&record.embedding).map_err(|e| RepoError::Storage(e.to_string()))?)
+    .execute(tx.as_mut())
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(())
+}
+
+async fn enqueue_embedding_job_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job: &EmbeddingJobRecord,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        r#"
+INSERT INTO embedding_job_queue (
+  workspace_id, document_id, revision_id, embed_model, source_text,
+  archived_at, deleted_at, attempt_count, last_error, available_at, claimed_at,
+  created_at, modified_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7, 0, NULL, now(), NULL, now(), now())
+ON CONFLICT (workspace_id, document_id, embed_model) DO UPDATE SET
+  revision_id = EXCLUDED.revision_id,
+  source_text = EXCLUDED.source_text,
+  archived_at = EXCLUDED.archived_at,
+  deleted_at = EXCLUDED.deleted_at,
+  attempt_count = 0,
+  last_error = NULL,
+  available_at = now(),
+  claimed_at = NULL,
+  modified_at = now()
+        "#,
+    )
+    .bind(job.workspace_id)
+    .bind(job.document_id.0)
+    .bind(job.revision_id.0)
+    .bind(&job.embed_model)
+    .bind(&job.source_text)
+    .bind(job.archived_at)
+    .bind(job.deleted_at)
     .execute(tx.as_mut())
     .await
     .map_err(map_sqlx_error)?;
@@ -448,6 +504,17 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
             enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
         }
 
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                rev.id,
+                DEFAULT_EMBED_MODEL,
+            ),
+        )
+        .await?;
+
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
@@ -538,6 +605,17 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
             enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
         }
 
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                new_rev.id,
+                DEFAULT_EMBED_MODEL,
+            ),
+        )
+        .await?;
+
         let updated = sqlx::query(
             r#"
 UPDATE documents
@@ -571,6 +649,19 @@ WHERE id = $1
         if updated != 1 {
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
+
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                doc.current_revision_id.ok_or_else(|| {
+                    RepoError::Storage("document missing current revision".to_string())
+                })?,
+                DEFAULT_EMBED_MODEL,
+            ),
+        )
+        .await?;
 
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
