@@ -13,7 +13,7 @@ Docracy v1.1 MCP Server Interface is the current shipped milestone. The current 
 - Updates create immutable revisions and require `expected_revision` so stale writes fail.
 - `Init` returns the repo-owned `./governance` markdown files and all active `context` documents.
 - `DOCRACY_TASK_SCOPE` adds optional `task_scope` and `task_context_documents` fields; it never replaces `context_documents`.
-- Postgres migrations, full-text content search, filtering, ordering, pagination, and tests are in place.
+- Postgres migrations, full-text content search, vector mirroring, filtering, ordering, pagination, and tests are in place.
 
 Future ideas and non-finalized notes are kept separate below so the current v1 behavior is easy to read.
 
@@ -43,7 +43,7 @@ Future ideas and non-finalized notes are kept separate below so the current v1 b
 
 ### Future ideas
 
-- **Retrieval helper / smart context loading**, somehow send the entire chat history into this as a parameter. Vector search runs, top results, and the full files of some filtered set of results are appended to the context. List IDs and short blurbs about other results not included. Ensure high relevance to the user message/context history.
+- **Retrieval helper / smart context loading**, Qdrant now acts as a workspace-scoped derived index over Postgres so vector search can return top results while Postgres stays canonical. Append the full files of some filtered set of results to the context, plus IDs and short blurbs for the rest.
 - **Schema**, list or inform the agent of a specific schema and its structure to make querying it easier to understand?
 - **Delete**, allow agents to delete documents if they are no longer relevant. In reality it would probably just be archiving as a first-class tool, while searches can choose whether archived/deleted docs are included.
 
@@ -60,7 +60,7 @@ The repo-owned governance bundle under `./governance` is immutable and part of t
 
 ### Future ideas
 
-- **Vector Database.** A mirror of the Document Database. Whenever a document gets updated, including archive status and all metadata about the document, the mirror is updated too. Perfect parity is necessary. I think it's best if this stays a future implementation; the core feature for now is the document database.
+- **Vector Database.** Qdrant mirrors workspace-scoped document snapshots as a derived index. Postgres remains the source of truth, and archive/deleted state changes must be reflected in both stores.
 
 ## Document types
 

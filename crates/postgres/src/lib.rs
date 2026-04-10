@@ -841,6 +841,36 @@ ORDER BY modified_at DESC
         })
     }
 
+    async fn query_vector_documents(
+        &self,
+        query: DocumentQuery,
+        embedding: Vec<f32>,
+    ) -> Result<DocumentQueryResult, RepoError> {
+        let filtered = self.query_documents(query.clone()).await?;
+        let collection = qdrant_collection_name(self.workspace_id.unwrap_or_else(WorkspaceUuid::nil));
+        let ranked_ids = vector::qdrant_search_point_ids(&collection, &embedding, query.limit as usize).await?;
+
+        let filtered_by_id = filtered
+            .documents
+            .into_iter()
+            .map(|doc| (doc.id, doc))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        let documents = ranked_ids
+            .into_iter()
+            .filter_map(|id| {
+                let parsed = Uuid::parse_str(&id).ok().map(DocumentId);
+                parsed.and_then(|id| filtered_by_id.get(&id).cloned())
+            })
+            .collect::<Vec<_>>();
+
+        Ok(DocumentQueryResult {
+            documents,
+            total_count: filtered.total_count,
+            next_cursor: None,
+        })
+    }
+
     async fn query_raw_documents(
         &self,
         query: docracy_core::query::RawQueryInput,

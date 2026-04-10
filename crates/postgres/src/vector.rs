@@ -157,6 +157,69 @@ impl QdrantClient {
 
         Ok(())
     }
+
+    async fn search_point_ids(
+        &self,
+        collection: &str,
+        embedding: &[f32],
+        limit: usize,
+    ) -> Result<Vec<String>, RepoError> {
+        let url = format!(
+            "{}/collections/{}/points/search",
+            self.base_url.trim_end_matches('/'),
+            collection
+        );
+        let response = self
+            .client
+            .post(&url)
+            .json(&json!({
+                "vector": embedding,
+                "limit": limit,
+                "with_payload": false,
+                "with_vector": false,
+            }))
+            .send()
+            .await
+            .map_err(|e| qdrant_storage_error(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(qdrant_storage_error(format!(
+                "Qdrant search failed: {status} {body}"
+            )));
+        }
+
+        let value: Value = response
+            .json()
+            .await
+            .map_err(|e| qdrant_storage_error(e.to_string()))?;
+        let points = value
+            .get("result")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| qdrant_storage_error("Qdrant search response missing result array"))?;
+
+        let mut ids = Vec::with_capacity(points.len());
+        for point in points {
+            let id = point
+                .get("id")
+                .and_then(|value| value.as_str())
+                .ok_or_else(|| qdrant_storage_error("Qdrant search result missing point id"))?;
+            ids.push(id.to_string());
+        }
+
+        Ok(ids)
+    }
+}
+
+pub(crate) async fn qdrant_search_point_ids(
+    collection: &str,
+    embedding: &[f32],
+    limit: usize,
+) -> Result<Vec<String>, RepoError> {
+    QdrantClient::new()
+        .search_point_ids(collection, embedding, limit)
+        .await
 }
 
 impl PgRepository {
