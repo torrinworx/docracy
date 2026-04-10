@@ -473,6 +473,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "docracy-core",
+ "dotenvy",
  "reqwest",
  "serde_json",
  "sqlx",

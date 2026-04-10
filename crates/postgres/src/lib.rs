@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod vector;
+pub mod indexer;
 
 use async_trait::async_trait;
 use docracy_core::document::{Document, DocumentStatus, DocumentType};
@@ -50,6 +51,10 @@ impl PgRepository {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    pub fn workspace_id(&self) -> Option<WorkspaceUuid> {
+        self.workspace_id
     }
 
     pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
