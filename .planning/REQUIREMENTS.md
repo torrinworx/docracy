@@ -59,7 +59,7 @@
 ### Async Embedding Indexing
 
 - [x] **IDX-01**: Document create/update writes enqueue a workspace-scoped embedding job keyed by workspace, document, revision, and embedding model so Qdrant snapshots can be rebuilt without retaining vector blobs in Postgres.
-- [ ] **IDX-02**: A background worker can claim pending embedding jobs, call Ollama's `/api/embed`, and upsert workspace-scoped vectors into Qdrant.
+- [x] **IDX-02**: A background worker can claim pending embedding jobs, call Ollama's `/api/embed`, and upsert workspace-scoped vectors into Qdrant.
 - [x] **IDX-03**: Failed embedding or Qdrant writes leave the job retryable, and the local compose/docs expose `WORKSPACE_ID`, `OLLAMA_URL`, `OLLAMA_EMBED_MODEL`, and `QDRANT_URL` for operator control.
 
 ## Deferred / Out of Scope for v1.1

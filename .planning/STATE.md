@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-04-10T23:42:25.288Z"
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-04-10T23:50:50.920Z"
 progress:
   total_phases: 16
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 27
-  completed_plans: 27
+  completed_plans: 28
 ---
 
 # Project State
@@ -73,6 +73,7 @@ Plan: 2 of 2
 | Phase 12-vector-mirror-helper-and-vector-query-support P01 | 6 min | 3 tasks | 5 files |
 | Phase 12-vector-mirror-helper-and-vector-query-support P02 | 22 min | 3 tasks | 9 files |
 | Phase 13 P01 | 25 min | 3 tasks | 5 files |
+| Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index P02 | 8 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,9 @@ Recent decisions affecting current work:
 - [Phase 13]: Use EmbeddingJobRecord plus canonical JSON text so the worker receives a stable snapshot of the document payload.
 - [Phase 13]: Key embedding jobs by workspace/document/model and reset pending metadata on overwrite so stale work is replaced in place.
 - [Phase 13]: Keep the existing vector mirror queue path alongside the new embedding queue for compatibility with the current vector-mirror phase.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Workspace scope stays explicit through WORKSPACE_ID instead of guessing tenant context.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Derived vectors remain rebuildable by keeping model and tombstone metadata in Qdrant payloads.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Failure handling keeps jobs retryable rather than treating embed or upsert errors as terminal.
 
 ### Milestone Setup
 
@@ -184,6 +188,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-10T23:42:25.286Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-04-10T23:50:50.917Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None

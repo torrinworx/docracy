@@ -105,7 +105,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 10. Task-scoped init contexts | 3/3 | Complete    | 2026-04-09 |
 | 11. Refresh README usage docs | 2/2 | Complete   | 2026-04-09 |
 | 12. Vector mirror helper and vector query support | 2/2 | Complete   | 2026-04-10 |
-| 13. Async Ollama Embedding Worker and Qdrant-Only Vector Index | 1/2 | In Progress|  |
+| 13. Async Ollama Embedding Worker and Qdrant-Only Vector Index | 2/2 | Complete   | 2026-04-10 |
 
 ## Archived Milestones
 
@@ -192,8 +192,8 @@ Plans:
 **Goal**: Postgres document writes enqueue workspace-scoped embedding jobs for an async Ollama worker, and Qdrant remains the only derived vector index while Postgres stays canonical for document state.
 **Requirements**: IDX-01, IDX-02, IDX-03
 **Depends on:** Phase 12
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 13-01: Async embedding job contract + queue schema
-- [ ] 13-02: Ollama worker loop + Qdrant indexing runtime
+- [x] 13-02: Ollama worker loop + Qdrant indexing runtime
