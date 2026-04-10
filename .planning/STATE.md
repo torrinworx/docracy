@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 12-02-PLAN.md
-last_updated: "2026-04-10T03:33:50.709Z"
+stopped_at: Completed 13-01-PLAN.md
+last_updated: "2026-04-10T23:42:25.288Z"
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 13
-  total_plans: 25
-  completed_plans: 26
+  total_plans: 27
+  completed_plans: 27
 ---
 
 # Project State
@@ -72,6 +72,7 @@ Plan: 2 of 2
 | Phase 11 P02 | 11 min | 1 tasks | 1 files |
 | Phase 12-vector-mirror-helper-and-vector-query-support P01 | 6 min | 3 tasks | 5 files |
 | Phase 12-vector-mirror-helper-and-vector-query-support P02 | 22 min | 3 tasks | 9 files |
+| Phase 13 P01 | 25 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -141,6 +142,9 @@ Recent decisions affecting current work:
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Use workspace-scoped Qdrant collections keyed by document id so vector points overwrite cleanly instead of accumulating stale embeddings.
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Treat Postgres as canonical for filtering and hydration; Qdrant only supplies ranked ids.
 - [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep archive/deleted state authoritative in Postgres and mirror it into vector payloads for regression checks.
+- [Phase 13]: Use EmbeddingJobRecord plus canonical JSON text so the worker receives a stable snapshot of the document payload.
+- [Phase 13]: Key embedding jobs by workspace/document/model and reset pending metadata on overwrite so stale work is replaced in place.
+- [Phase 13]: Keep the existing vector mirror queue path alongside the new embedding queue for compatibility with the current vector-mirror phase.
 
 ### Milestone Setup
 
@@ -180,6 +184,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-10T03:33:50.706Z
-Stopped at: Completed 12-02-PLAN.md
+Last session: 2026-04-10T23:42:25.286Z
+Stopped at: Completed 13-01-PLAN.md
 Resume file: None

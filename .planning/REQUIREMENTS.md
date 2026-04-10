@@ -56,6 +56,12 @@
 
 - [x] **VEC-01**: Workspace-scoped vector mirroring and hybrid retrieval keep Postgres as source of truth while mirroring current document revisions into Qdrant for vector search.
 
+### Async Embedding Indexing
+
+- [x] **IDX-01**: Document create/update writes enqueue a workspace-scoped embedding job keyed by workspace, document, revision, and embedding model so Qdrant snapshots can be rebuilt without retaining vector blobs in Postgres.
+- [ ] **IDX-02**: A background worker can claim pending embedding jobs, call Ollama's `/api/embed`, and upsert workspace-scoped vectors into Qdrant.
+- [x] **IDX-03**: Failed embedding or Qdrant writes leave the job retryable, and the local compose/docs expose `WORKSPACE_ID`, `OLLAMA_URL`, `OLLAMA_EMBED_MODEL`, and `QDRANT_URL` for operator control.
+
 ## Deferred / Out of Scope for v1.1
 
 Explicitly excluded to keep the milestone focused on the first MCP interface layer.
@@ -98,10 +104,13 @@ Explicitly excluded to keep the milestone focused on the first MCP interface lay
 | GOV-07 | Phase 5 | Planned |
 | DOC-03 | Phase 5 | Planned |
 | VEC-01 | Phase 12 | Complete |
+| IDX-01 | Phase 13 | Planned |
+| IDX-02 | Phase 13 | Planned |
+| IDX-03 | Phase 13 | Planned |
 
 **Coverage:**
-- v1.1 requirements: 26 total
-- Mapped to phases: 26
+- v1.1 requirements: 29 total
+- Mapped to phases: 29
 - Unmapped: 0
 
 ---
