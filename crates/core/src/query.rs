@@ -1,6 +1,7 @@
 use crate::document::{Document, DocumentStatus};
 use crate::ids::DocumentId;
 use crate::validation::{validate_slug, ValidationError, ValidationResult};
+use crate::vector::VectorQueryInput;
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::{DateTime, Utc};
@@ -12,6 +13,8 @@ pub struct QueryInput {
     pub query: Option<String>,
 
     pub sql: Option<String>,
+
+    pub embedding: Option<Vec<f32>>,
 
     pub timeout_ms: Option<u64>,
 
@@ -94,6 +97,7 @@ pub struct RawQueryResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum QueryExecution {
     Guided(GuidedQueryInput),
+    Vector(VectorQueryInput),
     Raw(RawQueryInput),
 }
 
@@ -110,6 +114,7 @@ impl QueryInput {
         let QueryInput {
             query,
             sql,
+            embedding,
             timeout_ms,
             where_,
             order_by,
@@ -126,122 +131,142 @@ impl QueryInput {
             }));
         }
 
-        // Parse where
-        let mut types: Option<Vec<String>> = None;
-        let mut statuses: Option<Vec<String>> = None;
-        let mut created_gte: Option<DateTime<Utc>> = None;
-        let mut created_lte: Option<DateTime<Utc>> = None;
-        let mut modified_gte: Option<DateTime<Utc>> = None;
-        let mut modified_lte: Option<DateTime<Utc>> = None;
-        let mut archived: Option<bool> = None;
-        let mut deleted: Option<bool> = None;
+        let guided = parse_guided_query(query, where_, order_by, select, limit, cursor)?;
 
-        for (k, v) in &where_ {
-            if k.starts_with("extensions.") {
-                return Err(ValidationError::InvalidSlug { field: "where" });
-            }
-            match k.as_str() {
-                "type" => types = Some(parse_string_or_array("where.type", v)?),
-                "status" => statuses = Some(parse_string_or_array("where.status", v)?),
-                "created_gte" => created_gte = Some(parse_rfc3339("where.created_gte", v)?),
-                "created_lte" => created_lte = Some(parse_rfc3339("where.created_lte", v)?),
-                "modified_gte" => modified_gte = Some(parse_rfc3339("where.modified_gte", v)?),
-                "modified_lte" => modified_lte = Some(parse_rfc3339("where.modified_lte", v)?),
-                "archived" => archived = Some(parse_bool("where.archived", v)?),
-                "deleted" => deleted = Some(parse_bool("where.deleted", v)?),
-                _ => return Err(ValidationError::InvalidSlug { field: "where" }),
-            }
+        if let Some(embedding) = embedding {
+            return Ok(QueryExecution::Vector(VectorQueryInput::new(
+                guided.query,
+                embedding,
+            )));
         }
 
-        // README expectation: archived/deleted docs should not appear by default.
-        // Default to status=active, unless caller explicitly asks for archived/deleted.
-        let statuses = match statuses {
-            Some(s) => {
-                for it in &s {
-                    validate_slug("where.status", it)?;
-                }
-                Some(s)
-            }
-            None => {
-                if archived == Some(true) || deleted == Some(true) {
-                    None
-                } else {
-                    Some(vec![DocumentStatus::ACTIVE.to_string()])
-                }
-            }
-        };
-        if let Some(ts) = &types {
-            for t in ts {
-                validate_slug("where.type", t)?;
-            }
-        }
-
-        // Parse order_by
-        let order = if order_by.is_empty() {
-            DocumentQueryOrder::ModifiedDesc
-        } else if order_by.len() == 1 {
-            let ob = &order_by[0];
-            let dir = ob.direction.to_lowercase();
-            match (ob.field.as_str(), dir.as_str()) {
-                ("modified", "desc") => DocumentQueryOrder::ModifiedDesc,
-                ("modified", "asc") => DocumentQueryOrder::ModifiedAsc,
-                ("created", "desc") => DocumentQueryOrder::CreatedDesc,
-                ("created", "asc") => DocumentQueryOrder::CreatedAsc,
-                _ => return Err(ValidationError::InvalidSlug { field: "order_by" }),
-            }
-        } else {
-            return Err(ValidationError::InvalidSlug { field: "order_by" });
-        };
-
-        let limit = limit.unwrap_or(10).clamp(1, 100);
-        let cursor = match cursor {
-            None => None,
-            Some(raw) => Some(decode_cursor(&raw)?),
-        };
-
-        let mut select = select
-            .into_iter()
-            .map(|s| SelectField::parse(&s))
-            .collect::<ValidationResult<Vec<_>>>()?;
-        if select.is_empty() {
-            select = vec![
-                SelectField::Id,
-                SelectField::Type,
-                SelectField::Status,
-                SelectField::Created,
-                SelectField::Modified,
-            ];
-        }
-
-        let mut applied_where = where_;
-        if !applied_where.contains_key("status") {
-            if let Some(statuses) = &statuses {
-                applied_where.insert(
-                    "status".to_string(),
-                    Value::Array(statuses.iter().cloned().map(Value::String).collect()),
-                );
-            }
-        }
-
-        Ok(QueryExecution::Guided(GuidedQueryInput {
-            query: DocumentQuery {
-                query,
-                types,
-                statuses,
-                archived,
-                deleted,
-                created_gte,
-                created_lte,
-                modified_gte,
-                modified_lte,
-                order,
-                limit,
-                cursor,
-            },
-            select,
-            applied_where,
-        }))
+        Ok(QueryExecution::Guided(guided))
     }
+}
+
+pub(crate) fn parse_guided_query(
+    query: Option<String>,
+    where_: Map<String, Value>,
+    order_by: Vec<QueryOrderByInput>,
+    select: Vec<String>,
+    limit: Option<u32>,
+    cursor: Option<String>,
+) -> ValidationResult<GuidedQueryInput> {
+    // Parse where
+    let mut types: Option<Vec<String>> = None;
+    let mut statuses: Option<Vec<String>> = None;
+    let mut created_gte: Option<DateTime<Utc>> = None;
+    let mut created_lte: Option<DateTime<Utc>> = None;
+    let mut modified_gte: Option<DateTime<Utc>> = None;
+    let mut modified_lte: Option<DateTime<Utc>> = None;
+    let mut archived: Option<bool> = None;
+    let mut deleted: Option<bool> = None;
+
+    for (k, v) in &where_ {
+        if k.starts_with("extensions.") {
+            return Err(ValidationError::InvalidSlug { field: "where" });
+        }
+        match k.as_str() {
+            "type" => types = Some(parse_string_or_array("where.type", v)?),
+            "status" => statuses = Some(parse_string_or_array("where.status", v)?),
+            "created_gte" => created_gte = Some(parse_rfc3339("where.created_gte", v)?),
+            "created_lte" => created_lte = Some(parse_rfc3339("where.created_lte", v)?),
+            "modified_gte" => modified_gte = Some(parse_rfc3339("where.modified_gte", v)?),
+            "modified_lte" => modified_lte = Some(parse_rfc3339("where.modified_lte", v)?),
+            "archived" => archived = Some(parse_bool("where.archived", v)?),
+            "deleted" => deleted = Some(parse_bool("where.deleted", v)?),
+            _ => return Err(ValidationError::InvalidSlug { field: "where" }),
+        }
+    }
+
+    // README expectation: archived/deleted docs should not appear by default.
+    // Default to status=active, unless caller explicitly asks for archived/deleted.
+    let statuses = match statuses {
+        Some(s) => {
+            for it in &s {
+                validate_slug("where.status", it)?;
+            }
+            Some(s)
+        }
+        None => {
+            if archived == Some(true) || deleted == Some(true) {
+                None
+            } else {
+                Some(vec![DocumentStatus::ACTIVE.to_string()])
+            }
+        }
+    };
+    if let Some(ts) = &types {
+        for t in ts {
+            validate_slug("where.type", t)?;
+        }
+    }
+
+    // Parse order_by
+    let order = if order_by.is_empty() {
+        DocumentQueryOrder::ModifiedDesc
+    } else if order_by.len() == 1 {
+        let ob = &order_by[0];
+        let dir = ob.direction.to_lowercase();
+        match (ob.field.as_str(), dir.as_str()) {
+            ("modified", "desc") => DocumentQueryOrder::ModifiedDesc,
+            ("modified", "asc") => DocumentQueryOrder::ModifiedAsc,
+            ("created", "desc") => DocumentQueryOrder::CreatedDesc,
+            ("created", "asc") => DocumentQueryOrder::CreatedAsc,
+            _ => return Err(ValidationError::InvalidSlug { field: "order_by" }),
+        }
+    } else {
+        return Err(ValidationError::InvalidSlug { field: "order_by" });
+    };
+
+    let limit = limit.unwrap_or(10).clamp(1, 100);
+    let cursor = match cursor {
+        None => None,
+        Some(raw) => Some(decode_cursor(&raw)?),
+    };
+
+    let mut select = select
+        .into_iter()
+        .map(|s| SelectField::parse(&s))
+        .collect::<ValidationResult<Vec<_>>>()?;
+    if select.is_empty() {
+        select = vec![
+            SelectField::Id,
+            SelectField::Type,
+            SelectField::Status,
+            SelectField::Created,
+            SelectField::Modified,
+        ];
+    }
+
+    let mut applied_where = where_;
+    if !applied_where.contains_key("status") {
+        if let Some(statuses) = &statuses {
+            applied_where.insert(
+                "status".to_string(),
+                Value::Array(statuses.iter().cloned().map(Value::String).collect()),
+            );
+        }
+    }
+
+    Ok(GuidedQueryInput {
+        query: DocumentQuery {
+            query,
+            types,
+            statuses,
+            archived,
+            deleted,
+            created_gte,
+            created_lte,
+            modified_gte,
+            modified_lte,
+            order,
+            limit,
+            cursor,
+        },
+        select,
+        applied_where,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -491,6 +516,7 @@ mod tests {
             applied_where,
         }) = QueryInput {
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_,
             ..Default::default()
@@ -517,6 +543,7 @@ mod tests {
 
         let err = QueryInput {
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_,
             ..Default::default()
@@ -538,6 +565,7 @@ mod tests {
         let execution = QueryInput {
             query: Some("needle".to_string()),
             sql: Some("select * from documents".to_string()),
+            embedding: None,
             limit: Some(25),
             timeout_ms: Some(2500),
             where_,
@@ -567,6 +595,7 @@ mod tests {
             query: Some("needle".to_string()),
             sql: None,
             timeout_ms: None,
+            embedding: None,
             where_: Map::new(),
             order_by: vec![QueryOrderByInput {
                 field: "created".to_string(),
@@ -594,6 +623,35 @@ mod tests {
         assert_eq!(
             applied_where.get("status").unwrap(),
             &json!([DocumentStatus::ACTIVE])
+        );
+    }
+
+    #[test]
+    fn parse_routes_embedding_to_vector_query_input() {
+        let execution = QueryInput {
+            query: Some("needle".to_string()),
+            sql: None,
+            timeout_ms: None,
+            embedding: Some(vec![0.1, 0.2, 0.3]),
+            where_: Map::new(),
+            order_by: vec![],
+            select: vec![],
+            limit: Some(7),
+            cursor: None,
+        }
+        .parse()
+        .unwrap();
+
+        let QueryExecution::Vector(vector) = execution else {
+            panic!("expected vector query execution");
+        };
+
+        assert_eq!(vector.query.query, Some("needle".to_string()));
+        assert_eq!(vector.embedding, vec![0.1, 0.2, 0.3]);
+        assert_eq!(vector.query.limit, 7);
+        assert_eq!(
+            vector.query.statuses,
+            Some(vec![DocumentStatus::ACTIVE.to_string()])
         );
     }
 

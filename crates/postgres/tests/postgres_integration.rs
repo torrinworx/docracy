@@ -287,6 +287,7 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         QueryInput {
             query: Some("hello".to_string()),
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_: Map::new(),
             order_by: vec![],
@@ -326,6 +327,7 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         QueryInput {
             query: None,
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_,
             order_by: vec![],
@@ -843,6 +845,7 @@ async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
         QueryInput {
             query: None,
             sql: None,
+            embedding: None,
             timeout_ms: None,
             where_: where_a,
             order_by: vec![],
