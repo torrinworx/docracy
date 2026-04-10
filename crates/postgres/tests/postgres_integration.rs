@@ -551,6 +551,55 @@ async fn vector_mirror_queue_keeps_workspace_rows_isolated() {
 }
 
 #[tokio::test]
+async fn vector_mirror_collection_name_is_workspace_scoped() {
+    let workspace = Uuid::nil();
+    assert_eq!(
+        docracy_postgres::qdrant_collection_name(workspace),
+        "docracy_workspace_00000000-0000-0000-0000-000000000000"
+    );
+}
+
+#[tokio::test]
+async fn vector_mirror_flush_leaves_queue_pending_when_qdrant_is_unavailable() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_id = Uuid::new_v4();
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace_id).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"body": "flush me"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.7, 0.8, 0.9]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    std::env::set_var("QDRANT_URL", "http://127.0.0.1:1");
+    let err = repo.flush_vector_mirror_queue().await.unwrap_err();
+    std::env::remove_var("QDRANT_URL");
+
+    let message = format!("{err:?}");
+    assert!(message.contains("storage") || message.contains("Qdrant"));
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+}
+
+#[tokio::test]
 async fn migration_enforces_same_document_revision_lineage_and_indexes() {
     let Some(url) = database_url() else {
         return;

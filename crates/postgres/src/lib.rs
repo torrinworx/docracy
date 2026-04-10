@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod vector;
+
 use async_trait::async_trait;
 use docracy_core::document::{Document, DocumentStatus, DocumentType};
 use docracy_core::errors::RepoError;
@@ -15,6 +17,8 @@ use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
 use uuid::Uuid as WorkspaceUuid;
+
+pub use vector::qdrant_collection_name;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
