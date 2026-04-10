@@ -1,5 +1,7 @@
-use super::{map_sqlx_error, PgRepository};
+use super::{map_sqlx_error, qdrant_collection_name, PgRepository};
 use docracy_core::errors::RepoError;
+use serde_json::{json, Value};
+use reqwest::StatusCode;
 use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
 use std::time::Duration;
@@ -97,6 +99,7 @@ pub struct ClaimedEmbeddingJob {
 pub struct IndexerRuntime {
     repo: PgRepository,
     config: IndexerConfig,
+    client: reqwest::Client,
 }
 
 impl IndexerRuntime {
@@ -138,11 +141,23 @@ RETURNING
         let repo = PgRepository::connect_scoped(database_url, Some(config.workspace_id))
             .await
             .map_err(|e| RepoError::Storage(e.to_string()))?;
-        Ok(Self { repo, config })
+        Ok(Self {
+            repo,
+            config,
+            client: reqwest::Client::new(),
+        })
     }
 
     pub fn new(repo: PgRepository, config: IndexerConfig) -> Self {
-        Self { repo, config }
+        Self {
+            repo,
+            config,
+            client: reqwest::Client::new(),
+        }
+    }
+
+    pub fn repo(&self) -> &PgRepository {
+        &self.repo
     }
 
     pub async fn claim_pending_jobs(&self) -> Result<Vec<ClaimedEmbeddingJob>, RepoError> {
@@ -158,17 +173,242 @@ RETURNING
         Ok(jobs)
     }
 
+    pub async fn process_once(&self) -> Result<usize, RepoError> {
+        let claimed = self.claim_pending_jobs().await?;
+
+        for job in &claimed {
+            self.process_claimed_job(job).await?;
+        }
+
+        Ok(claimed.len())
+    }
+
     pub async fn run(&self) -> Result<(), RepoError> {
         loop {
-            let claimed = self.claim_pending_jobs().await?;
-            if claimed.is_empty() {
+            let claimed = self.process_once().await?;
+            if claimed == 0 {
                 tokio::time::sleep(Duration::from_millis(self.config.poll_interval_ms)).await;
-                continue;
             }
 
-            // Task 2 completes the Ollama/Qdrant pipeline. For now, keep the lease/drain loop alive.
             tokio::task::yield_now().await;
         }
+    }
+
+    async fn process_claimed_job(&self, job: &ClaimedEmbeddingJob) -> Result<(), RepoError> {
+        match self.embed_job(job).await {
+            Ok(embedding) => {
+                self.ensure_qdrant_collection(embedding.len()).await?;
+                self.upsert_qdrant_point(job, &embedding).await?;
+                self.complete_job(job).await?;
+            }
+            Err(err) => {
+                self.retry_job(job, &err.to_string()).await?;
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn embed_job(&self, job: &ClaimedEmbeddingJob) -> Result<Vec<f32>, RepoError> {
+        let url = format!("{}/api/embed", self.config.ollama_url.trim_end_matches('/'));
+        let response = self
+            .client
+            .post(&url)
+            .json(&json!({
+                "model": &job.embed_model,
+                "input": &job.source_text,
+            }))
+            .send()
+            .await
+            .map_err(|e| RepoError::Storage(format!("ollama embed request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(RepoError::Storage(format!(
+                "ollama embed failed: {status} {body}"
+            )));
+        }
+
+        let value: Value = response
+            .json()
+            .await
+            .map_err(|e| RepoError::Storage(format!("ollama embed response parse failed: {e}")))?;
+
+        let embedding = value
+            .get("embeddings")
+            .and_then(|value| value.as_array())
+            .and_then(|embeddings| embeddings.first())
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| RepoError::Storage("ollama embed response missing embeddings".to_string()))?;
+
+        let mut vector = Vec::with_capacity(embedding.len());
+        for value in embedding {
+            let number = value.as_f64().ok_or_else(|| {
+                RepoError::Storage("ollama embed response must contain numeric vectors".to_string())
+            })?;
+            vector.push(number as f32);
+        }
+
+        if vector.is_empty() {
+            return Err(RepoError::Storage(
+                "ollama embed response must not be empty".to_string(),
+            ));
+        }
+
+        Ok(vector)
+    }
+
+    async fn ensure_qdrant_collection(&self, dimension: usize) -> Result<(), RepoError> {
+        let collection = qdrant_collection_name(self.config.workspace_id);
+        let url = format!(
+            "{}/collections/{}",
+            self.config.qdrant_url.trim_end_matches('/'),
+            collection
+        );
+        let response = self
+            .client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| RepoError::Storage(format!("qdrant collection lookup failed: {e}")))?;
+
+        if response.status() == StatusCode::NOT_FOUND {
+            let create = self
+                .client
+                .put(&url)
+                .json(&json!({
+                    "vectors": {
+                        "size": dimension,
+                        "distance": "Cosine",
+                    }
+                }))
+                .send()
+                .await
+                .map_err(|e| RepoError::Storage(format!("qdrant collection create failed: {e}")))?;
+
+            if !create.status().is_success() {
+                let status = create.status();
+                let body = create.text().await.unwrap_or_default();
+                return Err(RepoError::Storage(format!(
+                    "qdrant collection create failed: {status} {body}"
+                )));
+            }
+
+            return Ok(());
+        }
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(RepoError::Storage(format!(
+                "qdrant collection lookup failed: {status} {body}"
+            )));
+        }
+
+        let info: Value = response
+            .json()
+            .await
+            .map_err(|e| RepoError::Storage(format!("qdrant collection parse failed: {e}")))?;
+        let existing_dimension = info
+            .pointer("/result/config/params/vectors/size")
+            .and_then(|value| value.as_u64())
+            .ok_or_else(|| {
+                RepoError::Storage("qdrant collection response missing vector size".to_string())
+            })?;
+
+        if existing_dimension != dimension as u64 {
+            return Err(RepoError::Storage(format!(
+                "qdrant collection dimension mismatch: existing={existing_dimension}, expected={dimension}"
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn upsert_qdrant_point(
+        &self,
+        job: &ClaimedEmbeddingJob,
+        embedding: &[f32],
+    ) -> Result<(), RepoError> {
+        let collection = qdrant_collection_name(self.config.workspace_id);
+        let url = format!(
+            "{}/collections/{}/points?wait=true",
+            self.config.qdrant_url.trim_end_matches('/'),
+            collection
+        );
+        let response = self
+            .client
+            .put(&url)
+            .json(&json!({
+                "points": [{
+                    "id": job.document_id.to_string(),
+                    "vector": embedding,
+                    "payload": {
+                        "workspace_id": job.workspace_id.to_string(),
+                        "document_id": job.document_id.to_string(),
+                        "revision_id": job.revision_id.to_string(),
+                        "embed_model": &job.embed_model,
+                        "archived_at": job.archived_at.map(|value| value.to_rfc3339()),
+                        "deleted_at": job.deleted_at.map(|value| value.to_rfc3339()),
+                        "embedding_dimension": embedding.len(),
+                    }
+                }]
+            }))
+            .send()
+            .await
+            .map_err(|e| RepoError::Storage(format!("qdrant upsert request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(RepoError::Storage(format!(
+                "qdrant upsert failed: {status} {body}"
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn complete_job(&self, job: &ClaimedEmbeddingJob) -> Result<(), RepoError> {
+        sqlx::query(
+            r#"
+DELETE FROM embedding_job_queue
+WHERE workspace_id = $1 AND document_id = $2 AND embed_model = $3
+            "#,
+        )
+        .bind(job.workspace_id)
+        .bind(job.document_id)
+        .bind(&job.embed_model)
+        .execute(self.repo.pool())
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
+    }
+
+    async fn retry_job(&self, job: &ClaimedEmbeddingJob, error: &str) -> Result<(), RepoError> {
+        sqlx::query(
+            r#"
+UPDATE embedding_job_queue
+SET
+  attempt_count = attempt_count + 1,
+  last_error = $4,
+  claimed_at = NULL,
+  available_at = now() + interval '5 minutes',
+  modified_at = now()
+WHERE workspace_id = $1 AND document_id = $2 AND embed_model = $3
+            "#,
+        )
+        .bind(job.workspace_id)
+        .bind(job.document_id)
+        .bind(&job.embed_model)
+        .bind(error)
+        .execute(self.repo.pool())
+        .await
+        .map_err(map_sqlx_error)?;
+
+        Ok(())
     }
 }
 

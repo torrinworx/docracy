@@ -137,6 +137,7 @@ impl QdrantClient {
                         "workspace_id": record.workspace_id.to_string(),
                         "document_id": record.document_id.to_string(),
                         "revision_id": record.revision_id.to_string(),
+                        "embed_model": std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| "embeddinggemma".to_string()),
                         "archived_at": record.archived_at.map(|value| value.to_rfc3339()),
                         "deleted_at": record.deleted_at.map(|value| value.to_rfc3339()),
                         "embedding_dimension": embedding.len(),

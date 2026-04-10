@@ -290,7 +290,7 @@ async fn indexer_embeds_canonical_source_text_and_upserts_qdrant() {
     )
     .bind(workspace_id)
     .bind(document_id.0)
-    .fetch_one(runtime.repo())
+    .fetch_one(runtime.repo().pool())
     .await
     .unwrap();
 
@@ -344,7 +344,7 @@ async fn indexer_retries_failed_jobs_with_attempt_count_and_error_metadata() {
     )
     .bind(workspace_id)
     .bind(document_id.0)
-    .fetch_one(runtime.repo())
+    .fetch_one(runtime.repo().pool())
     .await
     .unwrap();
 
