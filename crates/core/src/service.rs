@@ -158,10 +158,32 @@ pub async fn query_documents(
 }
 
 pub async fn query_vector_documents(
-    _repo: &dyn Repository,
-    _input: QueryVectorInput,
+    repo: &dyn Repository,
+    input: QueryVectorInput,
 ) -> Result<QueryResult, CoreError> {
-    todo!("implemented in Task 2")
+    let (query, select, applied_where, embedding) = input.parse()?;
+
+    let out = repo
+        .query_vector_documents(query.clone(), embedding)
+        .await?;
+
+    let ranked_ids: Vec<DocumentId> = out.documents.iter().map(|doc| doc.id).collect();
+    let hydrated = repo.get_documents(&ranked_ids).await?;
+    let hydrated_by_id = hydrated
+        .into_iter()
+        .map(|doc| (doc.id, doc))
+        .collect::<std::collections::HashMap<_, _>>();
+    let docs = ranked_ids
+        .into_iter()
+        .filter_map(|id| hydrated_by_id.get(&id).cloned())
+        .collect::<Vec<_>>();
+
+    Ok(QueryResult {
+        rows: project_rows(&docs, &select),
+        total_count: out.total_count,
+        applied_where,
+        next_cursor: None,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq)]

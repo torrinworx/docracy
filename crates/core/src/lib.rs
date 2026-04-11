@@ -19,7 +19,7 @@ pub use ids::{DocumentId, RevisionId};
 pub use memory::MemoryRepository;
 pub use query::{
     DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult, GuidedQueryInput,
-    QueryExecution, QueryInput, QueryResult, RawQueryInput, RawQueryResult,
+    QueryExecution, QueryInput, QueryResult, QueryVectorInput, RawQueryInput, RawQueryResult,
 };
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};

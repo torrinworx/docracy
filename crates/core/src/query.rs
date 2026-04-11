@@ -50,7 +50,20 @@ impl QueryVectorInput {
         Map<String, Value>,
         Vec<f32>,
     )> {
-        todo!("implemented in Task 2")
+        if self.embedding.is_empty() {
+            return Err(ValidationError::Empty { field: "embedding" });
+        }
+
+        let GuidedQueryInput {
+            mut query,
+            select,
+            applied_where,
+        } = parse_guided_query(None, self.where_, vec![], self.select, self.limit, None)?;
+
+        // Vector query does not support text filtering.
+        query.query = None;
+
+        Ok((query, select, applied_where, self.embedding))
     }
 }
 
@@ -651,6 +664,20 @@ mod tests {
         let QueryExecution::Guided(_) = execution else {
             panic!("expected guided query execution");
         };
+    }
+
+    #[test]
+    fn parse_vector_input_rejects_empty_embedding() {
+        let err = QueryVectorInput {
+            embedding: vec![],
+            where_: Map::new(),
+            select: vec![],
+            limit: None,
+        }
+        .parse()
+        .unwrap_err();
+
+        assert_eq!(err, ValidationError::Empty { field: "embedding" });
     }
 
     #[test]
