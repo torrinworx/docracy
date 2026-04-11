@@ -1,7 +1,6 @@
 use crate::document::{Document, DocumentStatus};
 use crate::ids::DocumentId;
 use crate::validation::{validate_slug, ValidationError, ValidationResult};
-use crate::vector::VectorQueryInput;
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::{DateTime, Utc};
@@ -13,8 +12,6 @@ pub struct QueryInput {
     pub query: Option<String>,
 
     pub sql: Option<String>,
-
-    pub embedding: Option<Vec<f32>>,
 
     pub timeout_ms: Option<u64>,
 
@@ -97,7 +94,6 @@ pub struct RawQueryResult {
 #[derive(Debug, Clone, PartialEq)]
 pub enum QueryExecution {
     Guided(GuidedQueryInput),
-    Vector(VectorQueryInput),
     Raw(RawQueryInput),
 }
 
@@ -114,7 +110,6 @@ impl QueryInput {
         let QueryInput {
             query,
             sql,
-            embedding,
             timeout_ms,
             where_,
             order_by,
@@ -131,16 +126,9 @@ impl QueryInput {
             }));
         }
 
-        let guided = parse_guided_query(query, where_, order_by, select, limit, cursor)?;
-
-        if let Some(embedding) = embedding {
-            return Ok(QueryExecution::Vector(VectorQueryInput::new(
-                guided.query,
-                embedding,
-            )));
-        }
-
-        Ok(QueryExecution::Guided(guided))
+        Ok(QueryExecution::Guided(parse_guided_query(
+            query, where_, order_by, select, limit, cursor,
+        )?))
     }
 }
 
@@ -516,7 +504,6 @@ mod tests {
             applied_where,
         }) = QueryInput {
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_,
             ..Default::default()
@@ -543,7 +530,6 @@ mod tests {
 
         let err = QueryInput {
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_,
             ..Default::default()
@@ -565,7 +551,6 @@ mod tests {
         let execution = QueryInput {
             query: Some("needle".to_string()),
             sql: Some("select * from documents".to_string()),
-            embedding: None,
             limit: Some(25),
             timeout_ms: Some(2500),
             where_,
@@ -595,7 +580,6 @@ mod tests {
             query: Some("needle".to_string()),
             sql: None,
             timeout_ms: None,
-            embedding: None,
             where_: Map::new(),
             order_by: vec![QueryOrderByInput {
                 field: "created".to_string(),
@@ -623,35 +607,6 @@ mod tests {
         assert_eq!(
             applied_where.get("status").unwrap(),
             &json!([DocumentStatus::ACTIVE])
-        );
-    }
-
-    #[test]
-    fn parse_routes_embedding_to_vector_query_input() {
-        let execution = QueryInput {
-            query: Some("needle".to_string()),
-            sql: None,
-            timeout_ms: None,
-            embedding: Some(vec![0.1, 0.2, 0.3]),
-            where_: Map::new(),
-            order_by: vec![],
-            select: vec![],
-            limit: Some(7),
-            cursor: None,
-        }
-        .parse()
-        .unwrap();
-
-        let QueryExecution::Vector(vector) = execution else {
-            panic!("expected vector query execution");
-        };
-
-        assert_eq!(vector.query.query, Some("needle".to_string()));
-        assert_eq!(vector.embedding, vec![0.1, 0.2, 0.3]);
-        assert_eq!(vector.query.limit, 7);
-        assert_eq!(
-            vector.query.statuses,
-            Some(vec![DocumentStatus::ACTIVE.to_string()])
         );
     }
 

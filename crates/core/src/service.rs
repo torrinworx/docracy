@@ -126,7 +126,6 @@ pub async fn query_documents(
     repo: &dyn Repository,
     input: QueryInput,
 ) -> Result<QueryResult, CoreError> {
-    let original_input = input.clone();
     match input.parse()? {
         QueryExecution::Guided(GuidedQueryInput {
             query,
@@ -142,39 +141,6 @@ pub async fn query_documents(
                 total_count: out.total_count,
                 applied_where,
                 next_cursor,
-            })
-        }
-        QueryExecution::Vector(vector) => {
-            let GuidedQueryInput {
-                query,
-                select,
-                applied_where,
-            } = crate::query::parse_guided_query(
-                original_input.query,
-                original_input.where_,
-                original_input.order_by,
-                original_input.select,
-                original_input.limit,
-                original_input.cursor,
-            )?;
-
-            let out = repo
-                .query_vector_documents(query.clone(), vector.embedding)
-                .await?;
-
-            let ranked_ids: Vec<DocumentId> = out.documents.iter().map(|doc| doc.id).collect();
-            let hydrated = repo.get_documents(&ranked_ids).await?;
-            let hydrated_by_id = hydrated.into_iter().map(|doc| (doc.id, doc)).collect::<std::collections::HashMap<_, _>>();
-            let docs = ranked_ids
-                .into_iter()
-                .filter_map(|id| hydrated_by_id.get(&id).cloned())
-                .collect::<Vec<_>>();
-
-            Ok(QueryResult {
-                rows: project_rows(&docs, &select),
-                total_count: out.total_count,
-                applied_where,
-                next_cursor: None,
             })
         }
         QueryExecution::Raw(raw) => {
@@ -1249,7 +1215,6 @@ mod tests {
             QueryInput {
                 query: None,
                 sql: None,
-                embedding: None,
                 timeout_ms: None,
                 where_: Map::new(),
                 order_by: vec![],
@@ -1275,7 +1240,6 @@ mod tests {
             QueryInput {
                 query: None,
                 sql: None,
-                embedding: None,
                 timeout_ms: None,
                 where_,
                 order_by: vec![],
@@ -1303,7 +1267,6 @@ mod tests {
             QueryInput {
                 query: Some("needle".to_string()),
                 sql: Some("select id from documents".to_string()),
-                embedding: None,
                 timeout_ms: Some(1_500),
                 where_: Map::from_iter([(String::from("extensions.title"), json!("x"))]),
                 order_by: vec![],
@@ -1323,54 +1286,5 @@ mod tests {
         assert_eq!(out.rows[0].get("id"), Some(&json!("raw-1")));
     }
 
-    #[tokio::test(flavor = "current_thread")]
-    async fn query_routes_vector_requests_and_hydrates_in_ranked_order() {
-        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
-        let doc_a = fixtures::seeded_document(
-            DocumentId(Uuid::from_u128(500)),
-            RevisionId(Uuid::from_u128(501)),
-            t0,
-            json!({"name": "alpha"}),
-        )
-        .0;
-        let doc_b = fixtures::seeded_document(
-            DocumentId(Uuid::from_u128(600)),
-            RevisionId(Uuid::from_u128(601)),
-            t0,
-            json!({"name": "bravo"}),
-        )
-        .0;
-
-        let repo = RecordingVectorRepository {
-            vector_documents: vec![doc_b.clone(), doc_a.clone()],
-            documents: vec![doc_a.clone(), doc_b.clone()],
-            ..Default::default()
-        };
-
-        let out = query_documents(
-            &repo,
-            QueryInput {
-                query: Some("needle".to_string()),
-                sql: None,
-                embedding: Some(vec![0.25, 0.5, 0.75]),
-                timeout_ms: None,
-                where_: Map::new(),
-                order_by: vec![],
-                select: vec!["id".to_string()],
-                limit: Some(10),
-                cursor: None,
-            },
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(repo.vector_calls.get(), 1);
-        assert_eq!(repo.get_documents_calls.get(), 1);
-        let ids = out
-            .rows
-            .iter()
-            .map(|row| row.get("id").unwrap().as_str().unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(ids, vec![doc_b.id.to_string(), doc_a.id.to_string()]);
-    }
+    // Vector query behavior is tested via the dedicated `query_vector_documents` use-case.
 }
