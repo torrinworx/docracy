@@ -24,7 +24,11 @@ pub use vector::qdrant_collection_name;
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
 const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
-const DEFAULT_EMBED_MODEL: &str = "embeddinggemma";
+const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text";
+
+fn default_embed_model() -> String {
+    std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| DEFAULT_EMBED_MODEL.to_string())
+}
 
 fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
     if id.is_nil() {
@@ -515,7 +519,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
                 &doc,
                 rev.id,
-                DEFAULT_EMBED_MODEL,
+                default_embed_model().as_str(),
             ),
         )
         .await?;
@@ -616,7 +620,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
                 &doc,
                 new_rev.id,
-                DEFAULT_EMBED_MODEL,
+                default_embed_model().as_str(),
             ),
         )
         .await?;
@@ -663,7 +667,7 @@ WHERE id = $1
                 doc.current_revision_id.ok_or_else(|| {
                     RepoError::Storage("document missing current revision".to_string())
                 })?,
-                DEFAULT_EMBED_MODEL,
+                default_embed_model().as_str(),
             ),
         )
         .await?;
