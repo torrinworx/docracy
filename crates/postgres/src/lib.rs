@@ -447,8 +447,7 @@ fn wrap_raw_count_query(sql: &str) -> String {
 }
 
 fn vector_candidate_limit(requested: usize) -> usize {
-    // Implemented in 14-02 Task 2.
-    requested
+    (requested.saturating_mul(5)).clamp(requested, 100)
 }
 
 #[async_trait(?Send)]
@@ -959,9 +958,15 @@ ORDER BY modified_at DESC
         query: DocumentQuery,
         embedding: Vec<f32>,
     ) -> Result<DocumentQueryResult, RepoError> {
-        let filtered = self.query_documents(query.clone()).await?;
+        let mut filter_query = query.clone();
+        filter_query.query = None;
+        let filtered = self.query_documents(filter_query).await?;
         let collection = qdrant_collection_name(self.workspace_id.unwrap_or_else(WorkspaceUuid::nil));
-        let ranked_ids = vector::qdrant_search_point_ids(&collection, &embedding, query.limit as usize).await?;
+
+        let requested = query.limit as usize;
+        let candidate_limit = vector_candidate_limit(requested);
+        let ranked_ids =
+            vector::qdrant_search_point_ids(&collection, &embedding, candidate_limit).await?;
 
         let filtered_by_id = filtered
             .documents
@@ -969,13 +974,15 @@ ORDER BY modified_at DESC
             .map(|doc| (doc.id, doc))
             .collect::<std::collections::HashMap<_, _>>();
 
-        let documents = ranked_ids
+        let mut documents = ranked_ids
             .into_iter()
             .filter_map(|id| {
                 let parsed = Uuid::parse_str(&id).ok().map(DocumentId);
                 parsed.and_then(|id| filtered_by_id.get(&id).cloned())
             })
             .collect::<Vec<_>>();
+
+        documents.truncate(requested);
 
         Ok(DocumentQueryResult {
             documents,
