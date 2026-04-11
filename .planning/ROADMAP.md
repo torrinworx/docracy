@@ -197,3 +197,16 @@ Plans:
 Plans:
 - [x] 13-01: Async embedding job contract + queue schema
 - [x] 13-02: Ollama worker loop + Qdrant indexing runtime
+
+### Phase 14: Split query into Postgres-only; add query_vector with auto-embedding and Qdrant options
+
+**Goal**: Agents can run Postgres-only guided/raw queries via `query`, and can run semantic search via a dedicated `query_vector` operation that auto-embeds query text (Ollama) and ranks via Qdrant while hydrating results from Postgres.
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans**: 4 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — Core: split Postgres query vs vector query contracts
+- [ ] 14-02-PLAN.md — Postgres: Ollama embed helper + vector query test migration
+- [ ] 14-03-PLAN.md — CLI: add `query-vector` subcommand with auto-embedding
+- [ ] 14-04-PLAN.md — MCP: add `query_vector` tool + update `query` schema/docs
