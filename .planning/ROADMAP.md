@@ -207,6 +207,6 @@ Plans:
 
 Plans:
 - [x] 14-01-PLAN.md — Core: split Postgres query vs vector query contracts
-- [ ] 14-02-PLAN.md — Postgres: Ollama embed helper + vector query test migration
+- [x] 14-02-PLAN.md — Postgres: Ollama embed helper + vector query test migration
 - [ ] 14-03-PLAN.md — CLI: add `query-vector` subcommand with auto-embedding
 - [ ] 14-04-PLAN.md — MCP: add `query_vector` tool + update `query` schema/docs

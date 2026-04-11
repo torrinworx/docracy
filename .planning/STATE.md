@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 14-01-PLAN.md
-last_updated: "2026-04-11T01:00:38.623Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-04-11T01:08:05.658Z"
 progress:
   total_phases: 17
   completed_phases: 14
   total_plans: 31
-  completed_plans: 29
+  completed_plans: 30
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-04-06)
 ## Current Position
 
 Phase: 14 (split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Plan: 2 of 4
 | Phase 13 P01 | 25 min | 3 tasks | 5 files |
 | Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index P02 | 8 min | 3 tasks | 9 files |
 | Phase 14 P01 | 5m | 2 tasks | 3 files |
+| Phase 14 P02 | 6m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -151,6 +152,8 @@ Recent decisions affecting current work:
 - [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Derived vectors remain rebuildable by keeping model and tombstone metadata in Qdrant payloads.
 - [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Failure handling keeps jobs retryable rather than treating embed or upsert errors as terminal.
 - [Phase 14]: Make vector search explicit by removing embedding routing from QueryInput and introducing QueryVectorInput + query_vector_documents
+- [Phase 14]: Export ollama_embed_text from docracy-postgres so CLI/MCP can reuse indexer-compatible embedding parsing
+- [Phase 14]: Over-fetch Qdrant candidates with a bounded multiplier and truncate after Postgres filtering to reduce vector search dropouts
 
 ### Milestone Setup
 
@@ -190,6 +193,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-11T01:00:38.621Z
-Stopped at: Completed 14-01-PLAN.md
+Last session: 2026-04-11T01:08:05.656Z
+Stopped at: Completed 14-02-PLAN.md
 Resume file: None
