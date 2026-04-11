@@ -656,6 +656,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_does_not_route_embedding_when_present_in_json_payload() {
+        let input: QueryInput = serde_json::from_value(json!({
+            "query": "needle",
+            "embedding": [0.1, 0.2, 0.3],
+            "limit": 7,
+            "select": ["id"],
+            "where": {}
+        }))
+        .unwrap();
+
+        let execution = input.parse().unwrap();
+        let QueryExecution::Guided(_) = execution else {
+            panic!("expected guided query execution");
+        };
+    }
+
+    #[test]
     fn cursor_round_trips_and_projection_is_stable() {
         let cursor = DocumentQueryCursor {
             ts: Utc.with_ymd_and_hms(2026, 1, 1, 12, 0, 0).unwrap(),
