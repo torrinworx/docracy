@@ -1,12 +1,13 @@
-use super::{map_sqlx_error, vector_embedding_from_value, PgRepository};
+use super::{PgRepository, map_sqlx_error, vector_embedding_from_value};
 use docracy_core::errors::RepoError;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::types::Uuid;
 use uuid::Uuid as WorkspaceUuid;
 
 const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_OLLAMA_EMBED_MODEL: &str = "embeddinggemma";
 const DEFAULT_QDRANT_URL: &str = "http://127.0.0.1:6333";
+const QDRANT_VECTOR_SIZE_ENV: &str = "QDRANT_VECTOR_SIZE";
 
 #[derive(sqlx::FromRow)]
 struct VectorMirrorQueueRow {
@@ -31,8 +32,27 @@ fn qdrant_storage_error(message: impl Into<String>) -> RepoError {
     RepoError::Storage(message.into())
 }
 
+pub(crate) fn qdrant_vector_size_from_env() -> Option<usize> {
+    let raw = std::env::var(QDRANT_VECTOR_SIZE_ENV).ok()?;
+    let size = raw.parse::<usize>().ok()?;
+
+    (size > 0).then_some(size)
+}
+
+fn qdrant_collection_missing_error(collection: &str) -> RepoError {
+    qdrant_storage_error(format!("Qdrant collection missing: {collection}"))
+}
+
+fn is_qdrant_collection_missing_error(err: &RepoError) -> bool {
+    matches!(err, RepoError::Storage(message) if message.contains("Qdrant collection missing"))
+}
+
 fn qdrant_collection_url(base_url: &str, collection: &str) -> String {
-    format!("{}/collections/{}", base_url.trim_end_matches('/'), collection)
+    format!(
+        "{}/collections/{}",
+        base_url.trim_end_matches('/'),
+        collection
+    )
 }
 
 fn qdrant_points_url(base_url: &str, collection: &str) -> String {
@@ -109,7 +129,9 @@ impl QdrantClient {
         let existing_dimension = info
             .pointer("/result/config/params/vectors/size")
             .and_then(|value| value.as_u64())
-            .ok_or_else(|| qdrant_storage_error("Qdrant collection response missing vector size"))?;
+            .ok_or_else(|| {
+                qdrant_storage_error("Qdrant collection response missing vector size")
+            })?;
 
         if existing_dimension != dimension as u64 {
             return Err(qdrant_storage_error(format!(
@@ -119,6 +141,14 @@ impl QdrantClient {
         }
 
         Ok(())
+    }
+
+    async fn ensure_collection_if_missing(
+        &self,
+        collection: &str,
+        dimension: usize,
+    ) -> Result<(), RepoError> {
+        self.ensure_collection(collection, dimension).await
     }
 
     async fn upsert_point(
@@ -186,6 +216,10 @@ impl QdrantClient {
             .map_err(|e| qdrant_storage_error(e.to_string()))?;
 
         if !response.status().is_success() {
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                return Err(qdrant_collection_missing_error(collection));
+            }
+
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             return Err(qdrant_storage_error(format!(
@@ -213,6 +247,32 @@ impl QdrantClient {
 
         Ok(ids)
     }
+
+    async fn search_point_ids_with_recovery(
+        &self,
+        collection: &str,
+        embedding: &[f32],
+        limit: usize,
+    ) -> Result<Vec<String>, RepoError> {
+        match self.search_point_ids(collection, embedding, limit).await {
+            Ok(ids) => Ok(ids),
+            Err(err) if is_qdrant_collection_missing_error(&err) => {
+                self.ensure_collection_if_missing(collection, embedding.len())
+                    .await?;
+                self.search_point_ids(collection, embedding, limit).await
+            }
+            Err(err) => Err(err),
+        }
+    }
+}
+
+pub(crate) async fn ensure_qdrant_collection(
+    collection: &str,
+    dimension: usize,
+) -> Result<(), RepoError> {
+    QdrantClient::new()
+        .ensure_collection(collection, dimension)
+        .await
 }
 
 pub(crate) async fn qdrant_search_point_ids(
@@ -221,7 +281,7 @@ pub(crate) async fn qdrant_search_point_ids(
     limit: usize,
 ) -> Result<Vec<String>, RepoError> {
     QdrantClient::new()
-        .search_point_ids(collection, embedding, limit)
+        .search_point_ids_with_recovery(collection, embedding, limit)
         .await
 }
 
@@ -265,7 +325,9 @@ pub async fn ollama_embed_text(
         .and_then(|value| value.as_array())
         .and_then(|embeddings| embeddings.first())
         .and_then(|value| value.as_array())
-        .ok_or_else(|| RepoError::Storage("ollama embed response missing embeddings".to_string()))?;
+        .ok_or_else(|| {
+            RepoError::Storage("ollama embed response missing embeddings".to_string())
+        })?;
 
     let mut vector = Vec::with_capacity(embedding.len());
     for value in embedding {
@@ -311,7 +373,9 @@ ORDER BY modified_at ASC, document_id ASC
             }
 
             let collection = qdrant_collection_name(row.workspace_id);
-            qdrant.ensure_collection(&collection, embedding.len()).await?;
+            qdrant
+                .ensure_collection(&collection, embedding.len())
+                .await?;
             qdrant.upsert_point(&collection, &row, &embedding).await?;
 
             sqlx::query(
@@ -388,7 +452,9 @@ mod tests {
             "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         );
-        stream.write_all(response.as_bytes()).expect("write response");
+        stream
+            .write_all(response.as_bytes())
+            .expect("write response");
     }
 
     #[tokio::test]
@@ -402,14 +468,13 @@ mod tests {
             for request_idx in 0..4 {
                 let (mut stream, _) = listener.accept().expect("accept request");
                 let request = read_http_request(&mut stream);
-                captured_server.lock().expect("capture lock").push(request.clone());
+                captured_server
+                    .lock()
+                    .expect("capture lock")
+                    .push(request.clone());
 
                 match request_idx {
-                    0 => respond(
-                        &mut stream,
-                        "404 Not Found",
-                        r#"{"status":"not found"}"#,
-                    ),
+                    0 => respond(&mut stream, "404 Not Found", r#"{"status":"not found"}"#),
                     1 => respond(&mut stream, "200 OK", r#"{"result":{}}"#),
                     2 | 3 => respond(&mut stream, "200 OK", r#"{"result":{}}"#),
                     _ => unreachable!(),
@@ -449,10 +514,68 @@ mod tests {
         let captured = captured.lock().expect("captured requests");
         assert!(captured[0].starts_with(&format!("GET /collections/{collection}")));
         assert!(captured[1].starts_with(&format!("PUT /collections/{collection}")));
-        assert!(captured[2].starts_with(&format!("PUT /collections/{collection}/points?wait=true")));
-        assert!(captured[3].starts_with(&format!("PUT /collections/{collection}/points?wait=true")));
+        assert!(
+            captured[2].starts_with(&format!("PUT /collections/{collection}/points?wait=true"))
+        );
+        assert!(
+            captured[3].starts_with(&format!("PUT /collections/{collection}/points?wait=true"))
+        );
         assert!(captured[2].contains(&format!("\"id\":\"{}\"", row.document_id)));
         assert!(captured[3].contains(&format!("\"id\":\"{}\"", row.document_id)));
+    }
+
+    #[tokio::test]
+    async fn qdrant_search_recreates_missing_collections_before_retrying() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let captured = Arc::new(Mutex::new(Vec::<String>::new()));
+        let captured_server = Arc::clone(&captured);
+
+        let expected_search_result_id = Uuid::new_v4().to_string();
+        let search_result_id = expected_search_result_id.clone();
+        let server = thread::spawn(move || {
+            for request_idx in 0..4 {
+                let (mut stream, _) = listener.accept().expect("accept request");
+                let request = read_http_request(&mut stream);
+                captured_server
+                    .lock()
+                    .expect("capture lock")
+                    .push(request.clone());
+
+                match request_idx {
+                    0 => respond(&mut stream, "404 Not Found", r#"{"status":"not found"}"#),
+                    1 => respond(&mut stream, "404 Not Found", r#"{"status":"not found"}"#),
+                    2 => respond(&mut stream, "200 OK", r#"{"result":{}}"#),
+                    3 => respond(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"result":[{{"id":"{}","score":0.99}}]}}"#,
+                            search_result_id
+                        ),
+                    ),
+                    _ => unreachable!(),
+                }
+            }
+        });
+
+        std::env::set_var("QDRANT_URL", format!("http://{addr}"));
+
+        let collection = qdrant_collection_name(WorkspaceUuid::new_v4());
+        let ids = qdrant_search_point_ids(&collection, &[0.1, 0.2, 0.3], 1)
+            .await
+            .expect("search should recover");
+
+        std::env::remove_var("QDRANT_URL");
+        server.join().expect("server thread");
+
+        assert_eq!(ids, vec![expected_search_result_id]);
+
+        let captured = captured.lock().expect("captured requests");
+        assert!(captured[0].starts_with(&format!("POST /collections/{collection}/points/search")));
+        assert!(captured[1].starts_with(&format!("GET /collections/{collection}")));
+        assert!(captured[2].starts_with(&format!("PUT /collections/{collection}")));
+        assert!(captured[3].starts_with(&format!("POST /collections/{collection}/points/search")));
     }
 
     #[tokio::test]
@@ -466,11 +589,7 @@ mod tests {
             let (mut stream, _) = listener.accept().expect("accept request");
             let request = read_http_request(&mut stream);
             captured_server.lock().expect("capture lock").push(request);
-            respond(
-                &mut stream,
-                "200 OK",
-                r#"{"embeddings":[[0.1,0.2,0.3]]}"#,
-            );
+            respond(&mut stream, "200 OK", r#"{"embeddings":[[0.1,0.2,0.3]]}"#);
         });
 
         std::env::set_var("OLLAMA_URL", format!("http://{addr}"));

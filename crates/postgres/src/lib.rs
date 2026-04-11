@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-mod vector;
 pub mod indexer;
+mod vector;
 
 use async_trait::async_trait;
 use docracy_core::document::{Document, DocumentStatus, DocumentType};
@@ -12,15 +12,15 @@ use docracy_core::query::{
 };
 use docracy_core::repository::Repository;
 use docracy_core::revision::DocumentRevision;
-use docracy_core::{canonical_embedding_source_text, EmbeddingJobRecord, VectorMirrorRecord};
+use docracy_core::{EmbeddingJobRecord, VectorMirrorRecord, canonical_embedding_source_text};
 use serde_json::{Map, Value};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
+use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid as WorkspaceUuid;
 
-pub use vector::qdrant_collection_name;
 pub use vector::ollama_embed_text;
+pub use vector::qdrant_collection_name;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
@@ -109,19 +109,24 @@ VALUES ($1)
         .await
         .map_err(map_sqlx_error)?;
 
+        if let Some(vector_size) = vector::qdrant_vector_size_from_env() {
+            let collection = qdrant_collection_name(id);
+            let _ = vector::ensure_qdrant_collection(&collection, vector_size).await;
+        }
+
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::vector_mirror_record_from_document;
     use super::validate_workspace_id;
+    use super::vector_mirror_record_from_document;
     use chrono::{TimeZone, Utc};
     use docracy_core::document::{DocumentStatus, DocumentType};
+    use docracy_core::errors::RepoError;
     use docracy_core::{Document, DocumentId, RevisionId};
     use serde_json::json;
-    use docracy_core::errors::RepoError;
     use uuid::Uuid;
 
     #[test]
@@ -370,9 +375,11 @@ ON CONFLICT (workspace_id, document_id) DO UPDATE SET
     .bind(record.revision_id.0)
     .bind(record.archived_at)
     .bind(record.deleted_at)
-    .bind(i32::try_from(record.embedding_dimension()).map_err(|_| {
-        RepoError::Storage("vector embedding dimension out of range".to_string())
-    })?)
+    .bind(
+        i32::try_from(record.embedding_dimension()).map_err(|_| {
+            RepoError::Storage("vector embedding dimension out of range".to_string())
+        })?,
+    )
     .bind(serde_json::to_value(&record.embedding).map_err(|e| RepoError::Storage(e.to_string()))?)
     .execute(tx.as_mut())
     .await
@@ -961,7 +968,8 @@ ORDER BY modified_at DESC
         let mut filter_query = query.clone();
         filter_query.query = None;
         let filtered = self.query_documents(filter_query).await?;
-        let collection = qdrant_collection_name(self.workspace_id.unwrap_or_else(WorkspaceUuid::nil));
+        let collection =
+            qdrant_collection_name(self.workspace_id.unwrap_or_else(WorkspaceUuid::nil));
 
         let requested = query.limit as usize;
         let candidate_limit = vector_candidate_limit(requested);

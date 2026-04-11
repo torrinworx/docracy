@@ -1,9 +1,9 @@
-use super::{map_sqlx_error, qdrant_collection_name, PgRepository};
+use super::{PgRepository, map_sqlx_error, qdrant_collection_name};
 use docracy_core::errors::RepoError;
-use serde_json::{json, Value};
 use reqwest::StatusCode;
-use sqlx::types::chrono::{DateTime, Utc};
+use serde_json::{Value, json};
 use sqlx::types::Uuid;
+use sqlx::types::chrono::{DateTime, Utc};
 use std::time::Duration;
 use uuid::Uuid as WorkspaceUuid;
 
@@ -39,10 +39,12 @@ impl IndexerConfig {
             ));
         }
 
-        let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
+        let ollama_url =
+            std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
         let ollama_embed_model = std::env::var("OLLAMA_EMBED_MODEL")
             .unwrap_or_else(|_| DEFAULT_OLLAMA_EMBED_MODEL.to_string());
-        let qdrant_url = std::env::var("QDRANT_URL").unwrap_or_else(|_| DEFAULT_QDRANT_URL.to_string());
+        let qdrant_url =
+            std::env::var("QDRANT_URL").unwrap_or_else(|_| DEFAULT_QDRANT_URL.to_string());
 
         let poll_interval_ms = match std::env::var("POLL_INTERVAL_MS") {
             Ok(value) => value
@@ -50,7 +52,9 @@ impl IndexerConfig {
                 .map_err(|e| RepoError::Storage(format!("invalid POLL_INTERVAL_MS: {e}")))?,
             Err(std::env::VarError::NotPresent) => DEFAULT_POLL_INTERVAL_MS,
             Err(err) => {
-                return Err(RepoError::Storage(format!("invalid POLL_INTERVAL_MS: {err}")))
+                return Err(RepoError::Storage(format!(
+                    "invalid POLL_INTERVAL_MS: {err}"
+                )));
             }
         };
 
@@ -240,7 +244,9 @@ RETURNING
             .and_then(|value| value.as_array())
             .and_then(|embeddings| embeddings.first())
             .and_then(|value| value.as_array())
-            .ok_or_else(|| RepoError::Storage("ollama embed response missing embeddings".to_string()))?;
+            .ok_or_else(|| {
+                RepoError::Storage("ollama embed response missing embeddings".to_string())
+            })?;
 
         let mut vector = Vec::with_capacity(embedding.len());
         for value in embedding {
