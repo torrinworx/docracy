@@ -22,6 +22,7 @@ Tool names are stable:
 - `create`
 - `read`
 - `query`
+- `query_vector`
 - `update`
 
 The JSON shapes are intentionally aligned with the existing CLI/core contract.
@@ -71,7 +72,7 @@ Output:
 
 ### `query`
 
-Input: `docracy_core::query::QueryInput`
+Input: `docracy_core::query::QueryInput` (Postgres-only: guided filters + raw SQL; no vector embedding field)
 
 ```json
 {
@@ -97,6 +98,35 @@ Guided fallback example:
 ```
 
 Output: `QueryResult` serialized to JSON (same as CLI)
+
+### `query_vector`
+
+Input: explicit embedding or auto-embedding from query text.
+
+Explicit embedding:
+
+```json
+{
+  "embedding": [0.1, 0.2, 0.3],
+  "where": {},
+  "select": ["id"],
+  "limit": 10
+}
+```
+
+Auto-embedding:
+
+```json
+{
+  "query": "find docs about postgres",
+  "embed_model": "embeddinggemma",
+  "where": {},
+  "select": ["id", "type", "status"],
+  "limit": 10
+}
+```
+
+Output: `QueryResult` serialized to JSON (same row shape as `query`).
 
 ### `update`
 
