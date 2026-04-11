@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-04-11T01:12:43.891Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-04-11T01:13:20.561Z"
 progress:
   total_phases: 17
-  completed_phases: 14
+  completed_phases: 15
   total_plans: 31
-  completed_plans: 31
+  completed_plans: 32
 ---
 
 # Project State
@@ -77,6 +77,7 @@ Plan: 4 of 4
 | Phase 14 P01 | 5m | 2 tasks | 3 files |
 | Phase 14 P02 | 6m | 2 tasks | 3 files |
 | Phase 14 P03 | 3m | 1 tasks | 2 files |
+| Phase 14 P04 | 2m | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,7 @@ Recent decisions affecting current work:
 - [Phase 14]: Export ollama_embed_text from docracy-postgres so CLI/MCP can reuse indexer-compatible embedding parsing
 - [Phase 14]: Over-fetch Qdrant candidates with a bounded multiplier and truncate after Postgres filtering to reduce vector search dropouts
 - [Phase 14]: Expose docracy_core::query_vector_documents at the crate root for interface-layer consistency
+- [Phase 14]: Split MCP tool surface into query (Postgres-only) and query_vector (vector + auto-embedding)
 
 ### Milestone Setup
 
@@ -195,6 +197,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-11T01:12:43.889Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-04-11T01:13:20.559Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
