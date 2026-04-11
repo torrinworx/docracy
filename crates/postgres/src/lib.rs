@@ -162,6 +162,13 @@ mod tests {
         assert_eq!(record.document_id, document.id);
         assert_eq!(record.embedding_dimension(), 3);
     }
+
+    #[test]
+    fn vector_candidate_limit_uses_multiplier_and_bounds() {
+        assert_eq!(super::vector_candidate_limit(10), 50);
+        assert_eq!(super::vector_candidate_limit(1), 5);
+        assert_eq!(super::vector_candidate_limit(50), 100);
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -437,6 +444,11 @@ fn wrap_raw_query(sql: &str) -> String {
 
 fn wrap_raw_count_query(sql: &str) -> String {
     format!("SELECT COUNT(*)::bigint FROM ({sql}) AS raw_query")
+}
+
+fn vector_candidate_limit(requested: usize) -> usize {
+    // Implemented in 14-02 Task 2.
+    requested
 }
 
 #[async_trait(?Send)]

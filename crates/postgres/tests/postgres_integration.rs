@@ -1,10 +1,10 @@
 use docracy_core::document::{DocumentStatus, DocumentType, NewDocument};
 use docracy_core::query::RawQueryInput;
 use docracy_core::repository::Repository;
-use docracy_core::service::{SystemClock, UuidV4Generator};
+use docracy_core::service::{query_vector_documents, SystemClock, UuidV4Generator};
 use docracy_core::{
     create_document, init_bundle, query_documents, update_document, FsGovernanceSource, QueryInput,
-    UpdateDocumentInput,
+    QueryVectorInput, UpdateDocumentInput,
 };
 use docracy_postgres::PgRepository;
 use serde_json::json;
@@ -287,7 +287,6 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         QueryInput {
             query: Some("hello".to_string()),
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_: Map::new(),
             order_by: vec![],
@@ -327,7 +326,6 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         QueryInput {
             query: None,
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_,
             order_by: vec![],
@@ -783,22 +781,17 @@ async fn vector_search_is_workspace_scoped_and_archive_aware() {
     repo_a.flush_vector_mirror_queue().await.unwrap();
     repo_b.flush_vector_mirror_queue().await.unwrap();
 
-    let out = query_documents(
+    let out = query_vector_documents(
         &repo_a,
-        QueryInput {
-            query: None,
-            sql: None,
-            embedding: Some(vec![0.1, 0.2, 0.3]),
-            timeout_ms: None,
+        QueryVectorInput {
+            embedding: vec![0.1, 0.2, 0.3],
             where_: Map::new(),
-            order_by: vec![],
             select: vec!["id".to_string()],
             limit: Some(10),
-            cursor: None,
         },
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     let result_ids = out
         .rows
@@ -814,6 +807,15 @@ async fn vector_search_is_workspace_scoped_and_archive_aware() {
             workspace_a
         ))
     }));
+
+    let search_request = requests
+        .iter()
+        .find(|request| request.contains("/points/search"))
+        .expect("qdrant search request");
+    assert!(
+        search_request.contains("\"limit\":50"),
+        "expected candidate multiplier limit; got request={search_request}"
+    );
 
     std::env::remove_var("QDRANT_URL");
     server.join().unwrap();
@@ -881,18 +883,13 @@ async fn vector_search_excludes_archived_documents_from_results() {
 
     repo.flush_vector_mirror_queue().await.unwrap();
 
-    let out = query_documents(
+    let out = query_vector_documents(
         &repo,
-        QueryInput {
-            query: None,
-            sql: None,
-            embedding: Some(vec![0.7, 0.8, 0.9]),
-            timeout_ms: None,
+        QueryVectorInput {
+            embedding: vec![0.7, 0.8, 0.9],
             where_: Map::new(),
-            order_by: vec![],
             select: vec!["id".to_string()],
             limit: Some(10),
-            cursor: None,
         },
     )
     .await
@@ -956,18 +953,13 @@ async fn vector_mirror_flush_and_search_against_live_qdrant() {
         .unwrap();
     assert!(response.status().is_success());
 
-    let out = query_documents(
+    let out = query_vector_documents(
         &repo,
-        QueryInput {
-            query: None,
-            sql: None,
-            embedding: Some(vec![0.11, 0.22, 0.33]),
-            timeout_ms: None,
+        QueryVectorInput {
+            embedding: vec![0.11, 0.22, 0.33],
             where_: Map::new(),
-            order_by: vec![],
             select: vec!["id".to_string()],
             limit: Some(10),
-            cursor: None,
         },
     )
     .await
@@ -1221,7 +1213,6 @@ async fn workspace_scoped_sessions_isolate_reads_queries_and_raw_sql() {
         QueryInput {
             query: None,
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_: where_a,
             order_by: vec![],
