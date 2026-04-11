@@ -4,4 +4,5 @@
 target/
 qdrant_data/
 postgres_data/
+ollama_data/
 .DS_Store

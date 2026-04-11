@@ -8,6 +8,7 @@ pub mod memory;
 pub mod query;
 pub mod repository;
 pub mod revision;
+pub mod vector;
 pub mod service;
 pub mod validation;
 
@@ -18,13 +19,15 @@ pub use ids::{DocumentId, RevisionId};
 pub use memory::MemoryRepository;
 pub use query::{
     DocumentQuery, DocumentQueryCursor, DocumentQueryOrder, DocumentQueryResult, GuidedQueryInput,
-    QueryExecution, QueryInput, QueryResult, RawQueryInput, RawQueryResult,
+    QueryExecution, QueryInput, QueryResult, QueryVectorInput, RawQueryInput, RawQueryResult,
 };
 pub use repository::Repository;
 pub use revision::{DocumentRevision, NewRevision};
+pub use vector::{canonical_embedding_source_text, EmbeddingJobRecord, VectorMirrorRecord, VectorQueryInput};
 pub use service::{
-    create_document, init_bundle, query_documents, read_documents, update_document,
-    CreateDocumentResult, InitBundleResult, ReadDocumentsResult, UpdateDocumentInput,
-    UpdateDocumentResult,
+    create_document, init_bundle, init_bundle_scoped, query_documents, read_documents,
+    query_vector_documents, update_document, CreateDocumentResult, InitBundleResult,
+    ReadDocumentsResult,
+    UpdateDocumentInput, UpdateDocumentResult,
 };
 pub use validation::{ValidationError, ValidationResult};

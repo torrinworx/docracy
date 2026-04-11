@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 
+pub mod indexer;
+mod vector;
+
 use async_trait::async_trait;
 use docracy_core::document::{Document, DocumentStatus, DocumentType};
 use docracy_core::errors::RepoError;
@@ -9,15 +12,24 @@ use docracy_core::query::{
 };
 use docracy_core::repository::Repository;
 use docracy_core::revision::DocumentRevision;
+use docracy_core::{EmbeddingJobRecord, VectorMirrorRecord, canonical_embedding_source_text};
 use serde_json::{Map, Value};
 use sqlx::postgres::{PgPool, PgPoolOptions};
-use sqlx::types::chrono::{DateTime, Utc};
 use sqlx::types::Uuid;
+use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid as WorkspaceUuid;
+
+pub use vector::ollama_embed_text;
+pub use vector::qdrant_collection_name;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
 const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
+const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text";
+
+fn default_embed_model() -> String {
+    std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| DEFAULT_EMBED_MODEL.to_string())
+}
 
 fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
     if id.is_nil() {
@@ -46,6 +58,10 @@ impl PgRepository {
         &self.pool
     }
 
+    pub fn workspace_id(&self) -> Option<WorkspaceUuid> {
+        self.workspace_id
+    }
+
     pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
         Self::connect_scoped(database_url, None).await
     }
@@ -72,10 +88,7 @@ impl PgRepository {
         }
 
         let pool = pool_options.connect(database_url).await?;
-        Ok(Self {
-            pool,
-            workspace_id,
-        })
+        Ok(Self { pool, workspace_id })
     }
 
     pub async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
@@ -96,6 +109,11 @@ VALUES ($1)
         .await
         .map_err(map_sqlx_error)?;
 
+        if let Some(vector_size) = vector::qdrant_vector_size_from_env() {
+            let collection = qdrant_collection_name(id);
+            let _ = vector::ensure_qdrant_collection(&collection, vector_size).await;
+        }
+
         Ok(())
     }
 }
@@ -103,7 +121,12 @@ VALUES ($1)
 #[cfg(test)]
 mod tests {
     use super::validate_workspace_id;
+    use super::vector_mirror_record_from_document;
+    use chrono::{TimeZone, Utc};
+    use docracy_core::document::{DocumentStatus, DocumentType};
     use docracy_core::errors::RepoError;
+    use docracy_core::{Document, DocumentId, RevisionId};
+    use serde_json::json;
     use uuid::Uuid;
 
     #[test]
@@ -112,6 +135,44 @@ mod tests {
             validate_workspace_id(Uuid::nil()),
             Err(RepoError::Storage(message)) if message.contains("nil UUID")
         ));
+    }
+
+    #[test]
+    fn vector_mirror_record_uses_embedding_payload_when_present() {
+        let document = Document {
+            id: DocumentId(Uuid::new_v4()),
+            doc_type: DocumentType::new("general").unwrap(),
+            status: DocumentStatus::active(),
+            created_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            modified_at: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap(),
+            current_revision_id: Some(RevisionId(Uuid::new_v4())),
+            archived_at: None,
+            deleted_at: None,
+            content: json!({"body": "alpha"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.1, 0.2, 0.3]),
+            )]),
+        };
+
+        let record = vector_mirror_record_from_document(
+            Uuid::new_v4(),
+            &document,
+            RevisionId(Uuid::new_v4()),
+        )
+        .expect("embedding should produce a mirror record");
+
+        let record = record.expect("embedding should produce a mirror record");
+
+        assert_eq!(record.document_id, document.id);
+        assert_eq!(record.embedding_dimension(), 3);
+    }
+
+    #[test]
+    fn vector_candidate_limit_uses_multiplier_and_bounds() {
+        assert_eq!(super::vector_candidate_limit(10), 50);
+        assert_eq!(super::vector_candidate_limit(1), 5);
+        assert_eq!(super::vector_candidate_limit(50), 100);
     }
 }
 
@@ -226,6 +287,145 @@ fn extensions_as_value(ext: &Map<String, Value>) -> Value {
     Value::Object(ext.clone())
 }
 
+fn vector_embedding_from_value(value: &Value) -> Result<Vec<f32>, RepoError> {
+    let Value::Array(items) = value else {
+        return Err(RepoError::Storage(
+            "vector embedding payload must be a JSON array".to_string(),
+        ));
+    };
+
+    let mut embedding = Vec::with_capacity(items.len());
+    for item in items {
+        let Some(n) = item.as_f64() else {
+            return Err(RepoError::Storage(
+                "vector embedding payload must contain only numbers".to_string(),
+            ));
+        };
+        embedding.push(n as f32);
+    }
+
+    if embedding.is_empty() {
+        return Err(RepoError::Storage(
+            "vector embedding payload must not be empty".to_string(),
+        ));
+    }
+
+    Ok(embedding)
+}
+
+fn vector_mirror_record_from_document(
+    workspace_id: WorkspaceUuid,
+    document: &Document,
+    revision_id: RevisionId,
+) -> Result<Option<VectorMirrorRecord>, RepoError> {
+    let Some(embedding_value) = document.extensions.get("embedding") else {
+        return Ok(None);
+    };
+
+    let embedding = vector_embedding_from_value(embedding_value)?;
+    Ok(Some(VectorMirrorRecord {
+        workspace_id,
+        document_id: document.id,
+        revision_id,
+        archived_at: document.archived_at,
+        deleted_at: document.deleted_at,
+        embedding,
+    }))
+}
+
+fn embedding_job_record_from_document(
+    workspace_id: WorkspaceUuid,
+    document: &Document,
+    revision_id: RevisionId,
+    embed_model: &str,
+) -> EmbeddingJobRecord {
+    EmbeddingJobRecord {
+        workspace_id,
+        document_id: document.id,
+        revision_id,
+        embed_model: embed_model.to_string(),
+        source_text: canonical_embedding_source_text(&document.content),
+        archived_at: document.archived_at,
+        deleted_at: document.deleted_at,
+    }
+}
+
+async fn enqueue_vector_mirror_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    record: &VectorMirrorRecord,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        r#"
+INSERT INTO vector_mirror_queue (
+  workspace_id, document_id, revision_id, archived_at, deleted_at,
+  embedding_dimension, embedding, created_at, modified_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7, now(), now())
+ON CONFLICT (workspace_id, document_id) DO UPDATE SET
+  revision_id = EXCLUDED.revision_id,
+  archived_at = EXCLUDED.archived_at,
+  deleted_at = EXCLUDED.deleted_at,
+  embedding_dimension = EXCLUDED.embedding_dimension,
+  embedding = EXCLUDED.embedding,
+  modified_at = now()
+        "#,
+    )
+    .bind(record.workspace_id)
+    .bind(record.document_id.0)
+    .bind(record.revision_id.0)
+    .bind(record.archived_at)
+    .bind(record.deleted_at)
+    .bind(
+        i32::try_from(record.embedding_dimension()).map_err(|_| {
+            RepoError::Storage("vector embedding dimension out of range".to_string())
+        })?,
+    )
+    .bind(serde_json::to_value(&record.embedding).map_err(|e| RepoError::Storage(e.to_string()))?)
+    .execute(tx.as_mut())
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(())
+}
+
+async fn enqueue_embedding_job_snapshot(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    job: &EmbeddingJobRecord,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        r#"
+INSERT INTO embedding_job_queue (
+  workspace_id, document_id, revision_id, embed_model, source_text,
+  archived_at, deleted_at, attempt_count, last_error, available_at, claimed_at,
+  created_at, modified_at
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7, 0, NULL, now(), NULL, now(), now())
+ON CONFLICT (workspace_id, document_id, embed_model) DO UPDATE SET
+  revision_id = EXCLUDED.revision_id,
+  source_text = EXCLUDED.source_text,
+  archived_at = EXCLUDED.archived_at,
+  deleted_at = EXCLUDED.deleted_at,
+  attempt_count = 0,
+  last_error = NULL,
+  available_at = now(),
+  claimed_at = NULL,
+  modified_at = now()
+        "#,
+    )
+    .bind(job.workspace_id)
+    .bind(job.document_id.0)
+    .bind(job.revision_id.0)
+    .bind(&job.embed_model)
+    .bind(&job.source_text)
+    .bind(job.archived_at)
+    .bind(job.deleted_at)
+    .execute(tx.as_mut())
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(())
+}
+
 fn version_to_i32(version: u32) -> Result<i32, RepoError> {
     i32::try_from(version)
         .map_err(|_| RepoError::Storage("revision version out of range".to_string()))
@@ -251,6 +451,10 @@ fn wrap_raw_query(sql: &str) -> String {
 
 fn wrap_raw_count_query(sql: &str) -> String {
     format!("SELECT COUNT(*)::bigint FROM ({sql}) AS raw_query")
+}
+
+fn vector_candidate_limit(requested: usize) -> usize {
+    (requested.saturating_mul(5)).clamp(requested, 100)
 }
 
 #[async_trait(?Send)]
@@ -282,7 +486,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
         .execute(&mut *tx)
         .await
@@ -319,6 +523,25 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 map_sqlx_error(e)
             }
         })?;
+
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            rev.id,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
+
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                rev.id,
+                default_embed_model().as_str(),
+            ),
+        )
+        .await?;
 
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
@@ -402,6 +625,25 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         .await
         .map_err(map_sqlx_error)?;
 
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            new_rev.id,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
+
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                new_rev.id,
+                default_embed_model().as_str(),
+            ),
+        )
+        .await?;
+
         let updated = sqlx::query(
             r#"
 UPDATE documents
@@ -426,7 +668,7 @@ WHERE id = $1
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
         .execute(&mut *tx)
         .await
@@ -436,11 +678,25 @@ WHERE id = $1
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
 
+        enqueue_embedding_job_snapshot(
+            &mut tx,
+            &embedding_job_record_from_document(
+                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+                &doc,
+                doc.current_revision_id.ok_or_else(|| {
+                    RepoError::Storage("document missing current revision".to_string())
+                })?,
+                default_embed_model().as_str(),
+            ),
+        )
+        .await?;
+
         tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 
     async fn update_document(&mut self, doc: Document) -> Result<(), RepoError> {
+        let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         let updated = sqlx::query(
             r#"
 UPDATE documents
@@ -465,15 +721,27 @@ WHERE id = $1
         .bind(doc.current_revision_id.map(|r| r.0))
         .bind(doc.archived_at)
         .bind(doc.deleted_at)
-        .bind(doc.content)
+        .bind(doc.content.clone())
         .bind(extensions_as_value(&doc.extensions))
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(map_sqlx_error)?
         .rows_affected();
         if updated != 1 {
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
+
+        if let Some(record) = vector_mirror_record_from_document(
+            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            &doc,
+            doc.current_revision_id.ok_or_else(|| {
+                RepoError::Storage("document missing current revision".to_string())
+            })?,
+        )? {
+            enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -689,6 +957,45 @@ ORDER BY modified_at DESC
             documents: docs,
             total_count: total_count.max(0) as u64,
             next_cursor,
+        })
+    }
+
+    async fn query_vector_documents(
+        &self,
+        query: DocumentQuery,
+        embedding: Vec<f32>,
+    ) -> Result<DocumentQueryResult, RepoError> {
+        let mut filter_query = query.clone();
+        filter_query.query = None;
+        let filtered = self.query_documents(filter_query).await?;
+        let collection =
+            qdrant_collection_name(self.workspace_id.unwrap_or_else(WorkspaceUuid::nil));
+
+        let requested = query.limit as usize;
+        let candidate_limit = vector_candidate_limit(requested);
+        let ranked_ids =
+            vector::qdrant_search_point_ids(&collection, &embedding, candidate_limit).await?;
+
+        let filtered_by_id = filtered
+            .documents
+            .into_iter()
+            .map(|doc| (doc.id, doc))
+            .collect::<std::collections::HashMap<_, _>>();
+
+        let mut documents = ranked_ids
+            .into_iter()
+            .filter_map(|id| {
+                let parsed = Uuid::parse_str(&id).ok().map(DocumentId);
+                parsed.and_then(|id| filtered_by_id.get(&id).cloned())
+            })
+            .collect::<Vec<_>>();
+
+        documents.truncate(requested);
+
+        Ok(DocumentQueryResult {
+            documents,
+            total_count: filtered.total_count,
+            next_cursor: None,
         })
     }
 

@@ -76,6 +76,8 @@ impl DocracyMcpServer {
         let out = json!({
             "governance": {"files": governance_files},
             "context_documents": out.context_documents,
+            "task_scope": out.task_scope,
+            "task_context_documents": out.task_context_documents,
         });
 
         Content::json(out)
@@ -143,6 +145,55 @@ impl DocracyMcpServer {
             .map_err(|e| e.to_error_data())?;
 
         Content::json(out)
+    }
+
+    /// Vector query documents (explicit embedding or auto-embedding via query text).
+    #[rmcp::tool]
+    pub async fn query_vector(
+        &self,
+        Parameters(args): Parameters<QueryVectorArgs>,
+    ) -> Result<Content, rmcp::model::ErrorData> {
+        args.validate().map_err(|e| e.to_error_data())?;
+
+        let embedding = match args.embedding {
+            Some(embedding) => embedding,
+            None => {
+                let query = args
+                    .query
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| {
+                        McpError::new(
+                            McpErrorKind::ValidationError,
+                            "query_vector requires either embedding or query",
+                        )
+                        .to_error_data()
+                    })?;
+
+                docracy_postgres::ollama_embed_text(query, args.embed_model.as_deref())
+                    .await
+                    .map_err(|e| {
+                        McpError::from_core(docracy_core::CoreError::Repo(e)).to_error_data()
+                    })?
+            }
+        };
+
+        let core = docracy_core::QueryVectorInput {
+            embedding,
+            where_: args.where_.into_iter().collect(),
+            select: args.select,
+            limit: args.limit,
+        };
+
+        let guard = self.runtime_mut().await?;
+        let runtime = guard.as_ref().ok_or_else(Self::runtime_missing)?;
+
+        let out = crate::operations::query_vector_documents_runtime(runtime, core)
+            .await
+            .map_err(|e| e.to_error_data())?;
+
+        Content::json(serde_json::to_value(out).unwrap())
     }
 
     /// Update a document by creating a new revision (expected-head OCC enforced in core).
@@ -245,6 +296,50 @@ impl QueryArgs {
             limit: self.limit,
             cursor: self.cursor,
         }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct QueryVectorArgs {
+    pub query: Option<String>,
+    pub embedding: Option<Vec<f32>>,
+    pub embed_model: Option<String>,
+
+    #[serde(rename = "where", default)]
+    pub where_: BTreeMap<String, Value>,
+
+    #[serde(default)]
+    pub select: Vec<String>,
+
+    pub limit: Option<u32>,
+}
+
+impl QueryVectorArgs {
+    pub fn validate(&self) -> Result<(), McpError> {
+        if let Some(embedding) = &self.embedding {
+            if embedding.is_empty() {
+                return Err(McpError::new(
+                    McpErrorKind::ValidationError,
+                    "embedding must not be empty",
+                ));
+            }
+            return Ok(());
+        }
+
+        let has_query = self
+            .query
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty());
+
+        if !has_query {
+            return Err(McpError::new(
+                McpErrorKind::ValidationError,
+                "query_vector requires either embedding or query",
+            ));
+        }
+
+        Ok(())
     }
 }
 

@@ -45,6 +45,17 @@ pub trait Repository {
     async fn query_documents(&self, query: DocumentQuery)
         -> Result<DocumentQueryResult, RepoError>;
 
+    async fn query_vector_documents(
+        &self,
+        query: DocumentQuery,
+        _embedding: Vec<f32>,
+    ) -> Result<DocumentQueryResult, RepoError> {
+        let _ = query;
+        Err(RepoError::Storage(
+            "vector query execution is not supported by this repository".to_string(),
+        ))
+    }
+
     async fn query_raw_documents(
         &self,
         _query: RawQueryInput,

@@ -4,6 +4,7 @@ use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
 use crate::query::{
     encode_cursor, project_rows, GuidedQueryInput, QueryExecution, QueryInput, QueryResult,
+    QueryVectorInput,
 };
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
@@ -156,6 +157,35 @@ pub async fn query_documents(
     }
 }
 
+pub async fn query_vector_documents(
+    repo: &dyn Repository,
+    input: QueryVectorInput,
+) -> Result<QueryResult, CoreError> {
+    let (query, select, applied_where, embedding) = input.parse()?;
+
+    let out = repo
+        .query_vector_documents(query.clone(), embedding)
+        .await?;
+
+    let ranked_ids: Vec<DocumentId> = out.documents.iter().map(|doc| doc.id).collect();
+    let hydrated = repo.get_documents(&ranked_ids).await?;
+    let hydrated_by_id = hydrated
+        .into_iter()
+        .map(|doc| (doc.id, doc))
+        .collect::<std::collections::HashMap<_, _>>();
+    let docs = ranked_ids
+        .into_iter()
+        .filter_map(|id| hydrated_by_id.get(&id).cloned())
+        .collect::<Vec<_>>();
+
+    Ok(QueryResult {
+        rows: project_rows(&docs, &select),
+        total_count: out.total_count,
+        applied_where,
+        next_cursor: None,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateDocumentResult {
     pub document: Document,
@@ -290,6 +320,8 @@ async fn update_document_internal(
 pub struct InitBundleResult {
     pub governance: GovernanceBundle,
     pub context_documents: Vec<Document>,
+    pub task_scope: Option<String>,
+    pub task_context_documents: Vec<Document>,
 }
 
 pub async fn init_bundle(
@@ -297,6 +329,16 @@ pub async fn init_bundle(
     governance: &dyn GovernanceSource,
     clock: &dyn Clock,
     ids: &dyn IdGenerator,
+) -> Result<InitBundleResult, CoreError> {
+    init_bundle_scoped(repo, governance, clock, ids, None).await
+}
+
+pub async fn init_bundle_scoped(
+    repo: &mut dyn Repository,
+    governance: &dyn GovernanceSource,
+    clock: &dyn Clock,
+    ids: &dyn IdGenerator,
+    task_scope: Option<&str>,
 ) -> Result<InitBundleResult, CoreError> {
     let bundle = governance.load_bundle()?;
 
@@ -310,10 +352,32 @@ pub async fn init_bundle(
     reconcile_governance(repo, clock, ids, &governance_md).await?;
 
     let context_documents = repo.list_active_context_documents().await?;
+    let (task_scope, task_context_documents) = match task_scope {
+        None => (None, Vec::new()),
+        Some(scope) => {
+            let task_context_documents = context_documents
+                .iter()
+                .filter(|doc| matches_task_scope(doc, scope))
+                .cloned()
+                .collect();
+            (Some(scope.to_string()), task_context_documents)
+        }
+    };
+
     Ok(InitBundleResult {
         governance: bundle,
         context_documents,
+        task_scope,
+        task_context_documents,
     })
+}
+
+fn matches_task_scope(doc: &Document, scope: &str) -> bool {
+    match doc.extensions.get("task_scopes") {
+        None => true,
+        Some(Value::Array(scopes)) => scopes.iter().any(|value| value.as_str() == Some(scope)),
+        Some(_) => false,
+    }
 }
 
 async fn reconcile_governance(
@@ -515,12 +579,52 @@ mod tests {
             };
             (document, revision)
         }
+
+        pub(super) fn context_document(
+            id: DocumentId,
+            revision_id: RevisionId,
+            created_at: DateTime<Utc>,
+            content: Value,
+            extensions: Extensions,
+        ) -> (Document, DocumentRevision) {
+            let document = Document {
+                id,
+                doc_type: DocumentType::new(DocumentType::CONTEXT).unwrap(),
+                status: DocumentStatus::active(),
+                created_at,
+                modified_at: created_at,
+                current_revision_id: Some(revision_id),
+                archived_at: None,
+                deleted_at: None,
+                content: content.clone(),
+                extensions: extensions.clone(),
+            };
+            let revision = DocumentRevision {
+                id: revision_id,
+                document_id: id,
+                version: 1,
+                parent_revision_id: None,
+                created_at,
+                superseded_at: None,
+                content,
+                extensions,
+            };
+            (document, revision)
+        }
     }
 
     #[derive(Debug, Default)]
     struct RecordingRawRepository {
         raw_calls: std::cell::Cell<u32>,
         guided_calls: std::cell::Cell<u32>,
+    }
+
+    #[derive(Debug, Default)]
+    struct RecordingVectorRepository {
+        vector_calls: std::cell::Cell<u32>,
+        get_documents_calls: std::cell::Cell<u32>,
+        vector_documents: Vec<Document>,
+        documents: Vec<Document>,
     }
 
     #[async_trait::async_trait(?Send)]
@@ -615,6 +719,122 @@ mod tests {
                 rows: vec![Map::from_iter([(String::from("id"), json!("raw-1"))])],
                 total_count: 1,
             })
+        }
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl Repository for RecordingVectorRepository {
+        async fn create_document_with_revision(
+            &mut self,
+            _doc: Document,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_document_with_revisions(
+            &mut self,
+            _doc: Document,
+            _expected_head: RevisionId,
+            _superseded: DocumentRevision,
+            _new_rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_document(
+            &mut self,
+            _doc: Document,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_document(
+            &self,
+            _id: DocumentId,
+        ) -> Result<Option<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_documents(
+            &self,
+            ids: &[DocumentId],
+        ) -> Result<Vec<Document>, crate::errors::RepoError> {
+            self.get_documents_calls
+                .set(self.get_documents_calls.get() + 1);
+
+            let mut docs = Vec::new();
+            for id in ids.iter().rev() {
+                let doc = self
+                    .documents
+                    .iter()
+                    .find(|document| document.id == *id)
+                    .cloned()
+                    .expect("document should exist");
+                docs.push(doc);
+            }
+            Ok(docs)
+        }
+
+        async fn find_latest_document_by_type(
+            &self,
+            _doc_type: &str,
+        ) -> Result<Option<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn insert_revision(
+            &mut self,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn update_revision(
+            &mut self,
+            _rev: DocumentRevision,
+        ) -> Result<(), crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn get_revision(
+            &self,
+            _id: RevisionId,
+        ) -> Result<Option<DocumentRevision>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn list_active_context_documents(
+            &self,
+        ) -> Result<Vec<Document>, crate::errors::RepoError> {
+            panic!("unused")
+        }
+
+        async fn query_documents(
+            &self,
+            _query: DocumentQuery,
+        ) -> Result<DocumentQueryResult, crate::errors::RepoError> {
+            panic!("guided query should not be called in vector mode")
+        }
+
+        async fn query_vector_documents(
+            &self,
+            _query: DocumentQuery,
+            _embedding: Vec<f32>,
+        ) -> Result<DocumentQueryResult, crate::errors::RepoError> {
+            self.vector_calls.set(self.vector_calls.get() + 1);
+            Ok(DocumentQueryResult {
+                documents: self.vector_documents.clone(),
+                total_count: self.vector_documents.len() as u64,
+                next_cursor: None,
+            })
+        }
+
+        async fn query_raw_documents(
+            &self,
+            _query: RawQueryInput,
+        ) -> Result<RawQueryResult, crate::errors::RepoError> {
+            panic!("unused")
         }
     }
 
@@ -743,6 +963,130 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(rev.version, 1);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_bundle_scoped_returns_empty_task_subset_without_scope() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello governance").unwrap();
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let ids = FixedIds {
+            doc: DocumentId(Uuid::from_u128(90)),
+            revs: vec![RevisionId(Uuid::from_u128(91))],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let docs = [
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(40)),
+                RevisionId(Uuid::from_u128(50)),
+                t0,
+                json!({"kind": "unscoped"}),
+                Extensions::new(),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(41)),
+                RevisionId(Uuid::from_u128(51)),
+                t0,
+                json!({"kind": "planning"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["planning"]))]),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(42)),
+                RevisionId(Uuid::from_u128(52)),
+                t0,
+                json!({"kind": "execution"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["execution"]))]),
+            ),
+        ];
+        for (document, revision) in docs {
+            repo.create_document_with_revision(document, revision)
+                .await
+                .unwrap();
+        }
+
+        let out = init_bundle_scoped(&mut repo, &governance, &FixedClock(t0), &ids, None)
+            .await
+            .unwrap();
+
+        assert_eq!(out.context_documents.len(), 3);
+        assert_eq!(out.task_scope, None);
+        assert!(out.task_context_documents.is_empty());
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn init_bundle_scoped_filters_task_contexts_by_scope() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("CONSTITUTION.md"), "hello governance").unwrap();
+        let governance = crate::FsGovernanceSource::new(td.path());
+
+        let ids = FixedIds {
+            doc: DocumentId(Uuid::from_u128(100)),
+            revs: vec![RevisionId(Uuid::from_u128(101))],
+            idx: std::cell::Cell::new(0),
+        };
+
+        let mut repo = MemoryRepository::new();
+        let context_docs = vec![
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(60)),
+                RevisionId(Uuid::from_u128(70)),
+                t0,
+                json!({"kind": "unscoped"}),
+                Extensions::new(),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(61)),
+                RevisionId(Uuid::from_u128(71)),
+                t0,
+                json!({"kind": "planning"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["planning"]))]),
+            ),
+            fixtures::context_document(
+                DocumentId(Uuid::from_u128(62)),
+                RevisionId(Uuid::from_u128(72)),
+                t0,
+                json!({"kind": "execution"}),
+                Extensions::from_iter([(String::from("task_scopes"), json!(["execution"]))]),
+            ),
+        ];
+        for (document, revision) in context_docs {
+            repo.create_document_with_revision(document, revision)
+                .await
+                .unwrap();
+        }
+
+        let out = init_bundle_scoped(
+            &mut repo,
+            &governance,
+            &FixedClock(t0),
+            &ids,
+            Some("planning"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(out.context_documents.len(), 3);
+        assert_eq!(out.task_scope, Some("planning".to_string()));
+        assert_eq!(out.task_context_documents.len(), 2);
+        assert!(out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "unscoped"})));
+        assert!(out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "planning"})));
+        assert!(!out
+            .task_context_documents
+            .iter()
+            .any(|doc| doc.content == json!({"kind": "execution"})));
     }
 
     #[tokio::test(flavor = "current_thread")]
@@ -971,4 +1315,53 @@ mod tests {
         assert_eq!(out.next_cursor, None);
         assert_eq!(out.rows[0].get("id"), Some(&json!("raw-1")));
     }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn query_vector_documents_hydrates_in_ranked_order() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let doc_a = fixtures::seeded_document(
+            DocumentId(Uuid::from_u128(500)),
+            RevisionId(Uuid::from_u128(501)),
+            t0,
+            json!({"name": "alpha"}),
+        )
+        .0;
+        let doc_b = fixtures::seeded_document(
+            DocumentId(Uuid::from_u128(600)),
+            RevisionId(Uuid::from_u128(601)),
+            t0,
+            json!({"name": "bravo"}),
+        )
+        .0;
+
+        let repo = RecordingVectorRepository {
+            vector_documents: vec![doc_b.clone(), doc_a.clone()],
+            documents: vec![doc_a.clone(), doc_b.clone()],
+            ..Default::default()
+        };
+
+        let out = query_vector_documents(
+            &repo,
+            QueryVectorInput {
+                embedding: vec![0.25, 0.5, 0.75],
+                where_: Map::new(),
+                select: vec!["id".to_string()],
+                limit: Some(10),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(repo.vector_calls.get(), 1);
+        assert_eq!(repo.get_documents_calls.get(), 1);
+        assert_eq!(out.next_cursor, None);
+        let ids = out
+            .rows
+            .iter()
+            .map(|row| row.get("id").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec![doc_b.id.to_string(), doc_a.id.to_string()]);
+    }
+
+    // Vector query behavior is tested via the dedicated `query_vector_documents` use-case.
 }

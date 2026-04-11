@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-04-08T22:43:23.547Z"
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-04-11T01:13:20.561Z"
 progress:
-  total_phases: 12
-  completed_phases: 10
-  total_plans: 18
-  completed_plans: 19
+  total_phases: 17
+  completed_phases: 15
+  total_plans: 31
+  completed_plans: 32
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 09 — cli-workspace-create-command
+**Current focus:** Phase 14 — split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options
 
 ## Current Position
 
-Phase: 09
-Plan: Not started
+Phase: 14 (split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options) — EXECUTING
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -65,6 +65,19 @@ Plan: Not started
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P01 | 20 min | 2 tasks | 4 files |
 | Phase 08-workspace-tenancy-via-mcp-session-binding-and-postgres-rls-isolation P02 | 35 min | 3 tasks | 8 files |
 | Phase 09-cli-workspace-create-command P01 | 59 min | 2 tasks | 9 files |
+| Phase 10-task-scoped-init-contexts P01 | 18 min | 1 tasks | 2 files |
+| Phase 10-task-scoped-init-contexts P02 | 1 min | 2 tasks | 2 files |
+| Phase 10-task-scoped-init-contexts P03 | 3 min | 2 tasks | 6 files |
+| Phase 11 P01 | 12 min | 1 tasks | 1 files |
+| Phase 11 P02 | 11 min | 1 tasks | 1 files |
+| Phase 12-vector-mirror-helper-and-vector-query-support P01 | 6 min | 3 tasks | 5 files |
+| Phase 12-vector-mirror-helper-and-vector-query-support P02 | 22 min | 3 tasks | 9 files |
+| Phase 13 P01 | 25 min | 3 tasks | 5 files |
+| Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index P02 | 8 min | 3 tasks | 9 files |
+| Phase 14 P01 | 5m | 2 tasks | 3 files |
+| Phase 14 P02 | 6m | 2 tasks | 3 files |
+| Phase 14 P03 | 3m | 1 tasks | 2 files |
+| Phase 14 P04 | 2m | 1 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -119,6 +132,32 @@ Recent decisions affecting current work:
 - [Phase 09-cli-workspace-create-command]: Keep workspace provisioning CLI-only and return the created UUID as JSON on stdout
 - [Phase 09-cli-workspace-create-command]: Reject malformed and nil workspace IDs before connecting to Postgres so invalid input fails fast with structured validation errors
 - [Phase 09-cli-workspace-create-command]: Persist workspaces through PgRepository instead of embedding raw SQL in the CLI
+- [Phase 10-task-scoped-init-contexts]: Preserve the existing init contract by keeping context_documents as the full active context set and adding task_context_documents as an opt-in subset.
+- [Phase 10-task-scoped-init-contexts]: Use extensions.task_scopes as the only task selector so specialty init contexts stay data-driven and do not require a new tool surface.
+- [Phase 10-task-scoped-init-contexts]: Keep context_documents as the full active context set and add task-scoped fields alongside it.
+- [Phase 10-task-scoped-init-contexts]: Use DOCRACY_TASK_SCOPE as the only CLI input for specialty init selection.
+- [Phase 10-task-scoped-init-contexts]: Use extensions.task_scopes as the data-driven selector for scoped contexts.
+- [Phase 10-task-scoped-init-contexts]: Keep task scope process-configured via DOCRACY_TASK_SCOPE instead of adding a tool parameter.
+- [Phase 10-task-scoped-init-contexts]: Preserve context_documents as the full active set and add task_context_documents as an additive subset.
+- [Phase 11]: State the current milestone as v1.1 MCP Server Interface instead of v1.0
+- [Phase 11]: Document DOCRACY_TASK_SCOPE as optional and additive rather than a replacement for context_documents
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Use extensions.embedding as the opt-in payload carrier so the core document model stays unchanged.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep mirror rows current-only with (workspace_id, document_id) as the unique key.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Store embedding payloads as JSONB arrays plus an explicit dimension column for later Qdrant dispatch.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Use workspace-scoped Qdrant collections keyed by document id so vector points overwrite cleanly instead of accumulating stale embeddings.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Treat Postgres as canonical for filtering and hydration; Qdrant only supplies ranked ids.
+- [Phase 12-vector-mirror-helper-and-vector-query-support]: Keep archive/deleted state authoritative in Postgres and mirror it into vector payloads for regression checks.
+- [Phase 13]: Use EmbeddingJobRecord plus canonical JSON text so the worker receives a stable snapshot of the document payload.
+- [Phase 13]: Key embedding jobs by workspace/document/model and reset pending metadata on overwrite so stale work is replaced in place.
+- [Phase 13]: Keep the existing vector mirror queue path alongside the new embedding queue for compatibility with the current vector-mirror phase.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Workspace scope stays explicit through WORKSPACE_ID instead of guessing tenant context.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Derived vectors remain rebuildable by keeping model and tombstone metadata in Qdrant payloads.
+- [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Failure handling keeps jobs retryable rather than treating embed or upsert errors as terminal.
+- [Phase 14]: Make vector search explicit by removing embedding routing from QueryInput and introducing QueryVectorInput + query_vector_documents
+- [Phase 14]: Export ollama_embed_text from docracy-postgres so CLI/MCP can reuse indexer-compatible embedding parsing
+- [Phase 14]: Over-fetch Qdrant candidates with a bounded multiplier and truncate after Postgres filtering to reduce vector search dropouts
+- [Phase 14]: Expose docracy_core::query_vector_documents at the crate root for interface-layer consistency
+- [Phase 14]: Split MCP tool surface into query (Postgres-only) and query_vector (vector + auto-embedding)
 
 ### Milestone Setup
 
@@ -135,6 +174,8 @@ Recent decisions affecting current work:
 - Phase 7 refined: single `sql` field, guided fallback, read-only raw-table execution, and server-enforced timeout/row ceilings.
 - Phase 8 added: Workspace tenancy with generated workspace IDs, explicit MCP session binding through project-scoped client config, and Postgres RLS isolation.
 - Phase 10 added: Task-scoped init contexts.
+- Phase 11 added: Refresh README usage docs.
+- Phase 12 added: Vector mirror helper and vector query support.
 
 ### Pending Todos
 
@@ -145,14 +186,17 @@ Recent decisions affecting current work:
 - Craft launch marketing plan
 - Add MCP server to local opencode
 - Make governance path repo-defined in opencode config
+- Refresh README usage docs
 
 ### Blockers/Concerns
 
 - `gsd-tools` phase lookup currently resolves `01` to the archived v1.0 phase directory, so future `/gsd-* phase 1` commands need a milestone-aware fix or manual path awareness.
 - Plan-local requirement IDs WS-02 and WS-04 were not present in .planning/REQUIREMENTS.md, so automatic requirement marking skipped.
+- DOCRACY_TEST_DATABASE_URL was not available in the local environment, so live Postgres integration verification for the vector queue skipped and must be rerun with a database URL.
+- Plan requirement VEC-01 was not present in .planning/REQUIREMENTS.md, so automatic requirement marking could not update the traceability table.
 
 ## Session Continuity
 
-Last session: 2026-04-08T22:40:24.709Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-04-11T01:13:20.559Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None

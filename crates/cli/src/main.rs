@@ -9,7 +9,9 @@ use docracy_core::ids::{DocumentId, RevisionId};
 use docracy_core::query::QueryInput;
 use docracy_core::service::{SystemClock, UuidV4Generator};
 use docracy_core::{
-    create_document, init_bundle, query_documents, read_documents, update_document,
+    create_document, init_bundle_scoped, query_documents, query_vector_documents, read_documents,
+    update_document,
+    QueryVectorInput,
     UpdateDocumentInput,
 };
 use docracy_postgres::PgRepository;
@@ -65,6 +67,13 @@ enum Command {
 
     /// Query documents (JSON input)
     Query {
+        /// Input JSON file path (use '-' or omit to read from stdin)
+        #[arg(long)]
+        input: Option<String>,
+    },
+
+    /// Vector query documents (JSON input)
+    QueryVector {
         /// Input JSON file path (use '-' or omit to read from stdin)
         #[arg(long)]
         input: Option<String>,
@@ -133,6 +142,24 @@ struct UpdateInput {
     status: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct QueryVectorCliInput {
+    /// Query text to embed (used when `embedding` is omitted)
+    query: Option<String>,
+    /// Optional precomputed embedding
+    embedding: Option<Vec<f32>>,
+    /// Optional embed model override
+    embed_model: Option<String>,
+
+    #[serde(rename = "where", default)]
+    where_: Map<String, Value>,
+
+    #[serde(default)]
+    select: Vec<String>,
+
+    limit: Option<u32>,
+}
+
 #[tokio::main]
 async fn main() {
     if let Err(err) = run().await {
@@ -184,7 +211,10 @@ async fn run() -> Result<()> {
 
         Command::Init {} => {
             let governance = FsGovernanceSource::repo_owned();
-            let out = init_bundle(&mut repo, &governance, &clock, &ids).await?;
+            let task_scope = normalize_task_scope(std::env::var("DOCRACY_TASK_SCOPE").ok());
+            let out =
+                init_bundle_scoped(&mut repo, &governance, &clock, &ids, task_scope.as_deref())
+                    .await?;
 
             let governance_files: Vec<Value> = out
                 .governance
@@ -196,6 +226,8 @@ async fn run() -> Result<()> {
             json!({
                 "governance": {"files": governance_files},
                 "context_documents": out.context_documents,
+                "task_scope": out.task_scope,
+                "task_context_documents": out.task_context_documents,
             })
         }
 
@@ -208,6 +240,39 @@ async fn run() -> Result<()> {
         Command::Query { input } => {
             let q: QueryInput = read_json_input(input.as_deref())?;
             let out = query_documents(&repo, q).await?;
+            serde_json::to_value(out)?
+        }
+
+        Command::QueryVector { input } => {
+            let q: QueryVectorCliInput = read_json_input(input.as_deref())?;
+
+            let embedding = match q.embedding {
+                Some(embedding) => embedding,
+                None => {
+                    let query = q
+                        .query
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .ok_or_else(|| {
+                            CliValidationError::new("query_vector requires either embedding or query")
+                        })?;
+
+                    docracy_postgres::ollama_embed_text(query, q.embed_model.as_deref()).await?
+                }
+            };
+
+            let out = query_vector_documents(
+                &repo,
+                QueryVectorInput {
+                    embedding,
+                    where_: q.where_,
+                    select: q.select,
+                    limit: q.limit,
+                },
+            )
+            .await?;
+
             serde_json::to_value(out)?
         }
 
@@ -275,6 +340,13 @@ fn print_json(v: Value, pretty: bool) -> Result<()> {
     };
     println!("{s}");
     Ok(())
+}
+
+fn normalize_task_scope(raw: Option<String>) -> Option<String> {
+    raw.and_then(|value| {
+        let trimmed = value.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_string())
+    })
 }
 
 fn resolve_workspace_id(input: Option<&str>) -> Result<Uuid> {
@@ -450,5 +522,23 @@ mod tests {
         let nil = Uuid::nil().to_string();
         let err = resolve_workspace_id(Some(&nil)).unwrap_err();
         assert!(err.to_string().contains("nil"));
+    }
+
+    #[test]
+    fn normalize_task_scope_trims_whitespace() {
+        assert_eq!(
+            normalize_task_scope(Some("  planning  ".to_string())),
+            Some("planning".to_string())
+        );
+    }
+
+    #[test]
+    fn normalize_task_scope_treats_whitespace_only_as_none() {
+        assert_eq!(normalize_task_scope(Some("   ".to_string())), None);
+    }
+
+    #[test]
+    fn normalize_task_scope_preserves_missing_values() {
+        assert_eq!(normalize_task_scope(None), None);
     }
 }

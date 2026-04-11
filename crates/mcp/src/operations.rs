@@ -7,7 +7,7 @@
 use crate::error::McpError;
 use crate::runtime::McpRuntime;
 use docracy_core::ids::DocumentId;
-use docracy_core::query::{QueryInput, QueryResult};
+use docracy_core::query::{QueryInput, QueryResult, QueryVectorInput};
 use docracy_core::repository::Repository;
 use docracy_core::service::{Clock, IdGenerator};
 use docracy_core::service::{
@@ -30,13 +30,15 @@ pub async fn init_bundle(
 
 /// Runtime convenience wrapper for [`init_bundle`].
 pub async fn init_bundle_runtime(runtime: &mut McpRuntime) -> Result<InitBundleResult, McpError> {
-    init_bundle(
+    docracy_core::init_bundle_scoped(
         &mut runtime.repo,
         &runtime.governance,
         &runtime.clock,
         &runtime.ids,
+        runtime.task_scope.as_deref(),
     )
     .await
+    .map_err(McpError::from_core)
 }
 
 /// Create a new document + initial revision.
@@ -93,6 +95,24 @@ pub async fn query_documents_runtime(
     input: QueryInput,
 ) -> Result<QueryResult, McpError> {
     query_documents(&runtime.repo, input).await
+}
+
+/// Vector query documents using the shipped core contract.
+pub async fn query_vector_documents(
+    repo: &dyn Repository,
+    input: QueryVectorInput,
+) -> Result<QueryResult, McpError> {
+    docracy_core::query_vector_documents(repo, input)
+        .await
+        .map_err(McpError::from_core)
+}
+
+/// Runtime convenience wrapper for [`query_vector_documents`].
+pub async fn query_vector_documents_runtime(
+    runtime: &McpRuntime,
+    input: QueryVectorInput,
+) -> Result<QueryResult, McpError> {
+    query_vector_documents(&runtime.repo, input).await
 }
 
 /// Update a document by creating a new revision, guarded by expected-head OCC.

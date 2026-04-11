@@ -1,7 +1,19 @@
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: docracy-ollama
+    restart: unless-stopped
+    command: serve
+    ports:
+      - "${OLLAMA_HTTP_PORT}:11434"
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ./ollama_data:/root/.ollama
+
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: social-context-qdrant
+    container_name: docracy-qdrant
     restart: unless-stopped
     ports:
       - "${QDRANT_HTTP_PORT}:6333"
@@ -11,7 +23,7 @@ services:
 
   postgres:
     image: postgres:16
-    container_name: social-context-postgres
+    container_name: docracy-postgres
     restart: unless-stopped
     ports:
       - "${POSTGRES_PORT}:5432"

@@ -1,15 +1,16 @@
 use docracy_core::document::{DocumentStatus, DocumentType, NewDocument};
 use docracy_core::query::RawQueryInput;
 use docracy_core::repository::Repository;
-use docracy_core::service::{SystemClock, UuidV4Generator};
+use docracy_core::service::{query_vector_documents, SystemClock, UuidV4Generator};
 use docracy_core::{
     create_document, init_bundle, query_documents, update_document, FsGovernanceSource, QueryInput,
-    UpdateDocumentInput,
+    QueryVectorInput, UpdateDocumentInput,
 };
 use docracy_postgres::PgRepository;
 use serde_json::json;
 use serde_json::Map;
 use sqlx::postgres::PgPoolOptions;
+use sqlx::types::chrono::{DateTime, Utc};
 use tempfile::TempDir;
 use uuid::Uuid;
 
@@ -345,6 +346,627 @@ async fn init_bootstraps_and_repairs_governance_in_postgres() {
         &json!(DocumentStatus::ARCHIVED)
     );
     assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
+}
+
+#[derive(sqlx::FromRow, Debug)]
+struct VectorMirrorQueueRow {
+    workspace_id: Uuid,
+    document_id: Uuid,
+    revision_id: Uuid,
+    archived_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    embedding_dimension: i32,
+    embedding: serde_json::Value,
+}
+
+async fn vector_mirror_queue_rows(repo: &PgRepository, document_id: Uuid) -> Vec<VectorMirrorQueueRow> {
+    sqlx::query_as::<_, VectorMirrorQueueRow>(
+        r#"
+SELECT workspace_id, document_id, revision_id, archived_at, deleted_at, embedding_dimension, embedding
+FROM vector_mirror_queue
+WHERE document_id = $1
+ORDER BY workspace_id ASC
+        "#,
+    )
+    .bind(document_id)
+    .fetch_all(repo.pool())
+    .await
+    .unwrap()
+}
+
+async fn vector_mirror_queue_rows_for_workspace(
+    repo: &PgRepository,
+    workspace_id: Uuid,
+) -> Vec<VectorMirrorQueueRow> {
+    sqlx::query_as::<_, VectorMirrorQueueRow>(
+        r#"
+SELECT workspace_id, document_id, revision_id, archived_at, deleted_at, embedding_dimension, embedding
+FROM vector_mirror_queue
+WHERE workspace_id = $1
+ORDER BY document_id ASC
+        "#,
+    )
+    .bind(workspace_id)
+    .fetch_all(repo.pool())
+    .await
+    .unwrap()
+}
+
+fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+    use std::io::Read;
+    use std::time::Duration;
+
+    stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .expect("set timeout");
+
+    let mut request = Vec::new();
+    let mut buf = [0u8; 1024];
+    let mut header_end = None;
+
+    loop {
+        let n = stream.read(&mut buf).expect("read request");
+        if n == 0 {
+            break;
+        }
+        request.extend_from_slice(&buf[..n]);
+        if header_end.is_none() {
+            if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                header_end = Some(pos + 4);
+            }
+        }
+
+        if let Some(end) = header_end {
+            let headers = String::from_utf8_lossy(&request[..end]);
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let lower = line.to_ascii_lowercase();
+                    lower
+                        .strip_prefix("content-length:")
+                        .map(|value| value.trim().parse::<usize>().unwrap_or(0))
+                })
+                .unwrap_or(0);
+            if request.len() >= end + content_length {
+                break;
+            }
+        }
+    }
+
+    String::from_utf8(request).expect("request is utf8")
+}
+
+fn write_http_response(stream: &mut std::net::TcpStream, status: &str, body: &str) {
+    use std::io::Write;
+
+    let response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    stream.write_all(response.as_bytes()).expect("write response");
+}
+
+fn start_qdrant_mock(
+    search_body: &'static str,
+    request_limit: usize,
+) -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    std::thread::JoinHandle<()>,
+) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind qdrant mock");
+    let addr = listener.local_addr().expect("mock addr");
+    let captured = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let captured_server = std::sync::Arc::clone(&captured);
+
+    let handle = std::thread::spawn(move || {
+        for _ in 0..request_limit {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let request = read_http_request(&mut stream);
+            captured_server
+                .lock()
+                .expect("capture lock")
+                .push(request.clone());
+
+            if request.starts_with("GET /collections/") {
+                write_http_response(&mut stream, "404 Not Found", r#"{"status":"not found"}"#);
+            } else if request.starts_with("POST /collections/") && request.contains("/points/search") {
+                write_http_response(&mut stream, "200 OK", search_body);
+            } else {
+                write_http_response(&mut stream, "200 OK", r#"{"result":{}}"#);
+            }
+        }
+    });
+
+    (format!("http://{addr}"), captured, handle)
+}
+
+struct FixedIds {
+    doc: docracy_core::DocumentId,
+    revs: Vec<docracy_core::RevisionId>,
+    idx: std::cell::Cell<usize>,
+}
+
+impl docracy_core::service::IdGenerator for FixedIds {
+    fn new_document_id(&self) -> docracy_core::DocumentId {
+        self.doc
+    }
+
+    fn new_revision_id(&self) -> docracy_core::RevisionId {
+        let i = self.idx.get();
+        self.idx.set(i + 1);
+        self.revs[i]
+    }
+}
+
+#[tokio::test]
+async fn vector_mirror_queue_tracks_current_snapshot_in_place() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_id = Uuid::new_v4();
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace_id).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"body": "alpha"}),
+            extensions: serde_json::Map::from_iter([( 
+                "embedding".to_string(),
+                json!([0.25, 0.5, 0.75]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].workspace_id, workspace_id);
+    assert_eq!(rows[0].document_id, created.document.id.0);
+    assert_eq!(rows[0].revision_id, created.revision.id.0);
+    assert_eq!(rows[0].embedding_dimension, 3);
+
+    let updated = update_document(
+        &mut repo,
+        &clock,
+        &ids,
+        UpdateDocumentInput {
+            id: created.document.id,
+            expected_head: created.revision.id,
+            content: Some(json!({"body": "beta"})),
+            extensions: Some(serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([1.0, 2.0, 3.0, 4.0]),
+            )])),
+            status: Some(DocumentStatus::ARCHIVED.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].revision_id, updated.new_revision.id.0);
+    assert!(rows[0].archived_at.is_some());
+    assert!(rows[0].deleted_at.is_none());
+    assert_eq!(rows[0].embedding_dimension, 4);
+    assert_eq!(rows[0].embedding, json!([1.0, 2.0, 3.0, 4.0]));
+
+    let restored = update_document(
+        &mut repo,
+        &clock,
+        &ids,
+        UpdateDocumentInput {
+            id: created.document.id,
+            expected_head: updated.new_revision.id,
+            content: Some(json!({"body": "gamma"})),
+            extensions: Some(serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([9.0, 8.0, 7.0]),
+            )])),
+            status: Some(DocumentStatus::ACTIVE.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].revision_id, restored.new_revision.id.0);
+    assert!(rows[0].archived_at.is_none());
+    assert!(rows[0].deleted_at.is_none());
+    assert_eq!(rows[0].embedding_dimension, 3);
+    assert_eq!(rows[0].embedding, json!([9.0, 8.0, 7.0]));
+}
+
+#[tokio::test]
+async fn vector_mirror_queue_keeps_workspace_rows_isolated() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+
+    let (mut repo_a, _schema_guard_a) = isolated_repo_scoped(&url, Some(workspace_a)).await;
+    repo_a.migrate().await.unwrap();
+    repo_a.create_workspace(workspace_a).await.unwrap();
+
+    let (mut repo_b, _schema_guard_b) = isolated_repo_scoped(&url, Some(workspace_b)).await;
+    repo_b.migrate().await.unwrap();
+    repo_b.create_workspace(workspace_b).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+
+    let doc_a = create_document(
+        &mut repo_a,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "a"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.1, 0.2]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let doc_b = create_document(
+        &mut repo_b,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "b"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.3, 0.4]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let rows_a = vector_mirror_queue_rows(&repo_a, doc_a.document.id.0).await;
+    let rows_b = vector_mirror_queue_rows(&repo_b, doc_b.document.id.0).await;
+
+    assert_eq!(rows_a.len(), 1);
+    assert_eq!(rows_a[0].workspace_id, workspace_a);
+    assert_eq!(rows_b.len(), 1);
+    assert_eq!(rows_b[0].workspace_id, workspace_b);
+
+    let queue_rows_a = vector_mirror_queue_rows_for_workspace(&repo_a, workspace_a).await;
+    let queue_rows_b = vector_mirror_queue_rows_for_workspace(&repo_b, workspace_b).await;
+
+    assert_eq!(queue_rows_a.len(), 1);
+    assert_eq!(queue_rows_b.len(), 1);
+    assert_ne!(queue_rows_a[0].workspace_id, queue_rows_b[0].workspace_id);
+}
+
+#[tokio::test]
+async fn vector_mirror_collection_name_is_workspace_scoped() {
+    let workspace = Uuid::nil();
+    assert_eq!(
+        docracy_postgres::qdrant_collection_name(workspace),
+        "docracy_workspace_00000000-0000-0000-0000-000000000000"
+    );
+}
+
+#[tokio::test]
+async fn vector_mirror_flush_leaves_queue_pending_when_qdrant_is_unavailable() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_id = Uuid::new_v4();
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace_id).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = UuidV4Generator;
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"body": "flush me"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.7, 0.8, 0.9]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    std::env::set_var("QDRANT_URL", "http://127.0.0.1:1");
+    let err = repo.flush_vector_mirror_queue().await.unwrap_err();
+    std::env::remove_var("QDRANT_URL");
+
+    let message = format!("{err:?}");
+    assert!(message.contains("storage") || message.contains("Qdrant"));
+
+    let rows = vector_mirror_queue_rows(&repo, created.document.id.0).await;
+    assert_eq!(rows.len(), 1);
+}
+
+#[tokio::test]
+async fn vector_search_is_workspace_scoped_and_archive_aware() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace_a = Uuid::from_u128(0xA1);
+    let workspace_b = Uuid::from_u128(0xB2);
+    let doc_a_id = docracy_core::DocumentId(Uuid::from_u128(0xA10));
+    let rev_a_id = docracy_core::RevisionId(Uuid::from_u128(0xA11));
+    let doc_b_id = docracy_core::DocumentId(Uuid::from_u128(0xB20));
+    let rev_b_id = docracy_core::RevisionId(Uuid::from_u128(0xB21));
+
+    let search_body = format!(
+        r#"{{"result":[{{"id":"{}","score":0.99}},{{"id":"{}","score":0.98}}]}}"#,
+        doc_b_id.0, doc_a_id.0
+    );
+    let (qdrant_url, requests, server) = start_qdrant_mock(Box::leak(search_body.into_boxed_str()), 7);
+    std::env::set_var("QDRANT_URL", &qdrant_url);
+
+    let (mut repo_a, _schema_guard_a) = isolated_repo_scoped(&url, Some(workspace_a)).await;
+    repo_a.migrate().await.unwrap();
+    repo_a.create_workspace(workspace_a).await.unwrap();
+
+    let (mut repo_b, _schema_guard_b) = isolated_repo_scoped(&url, Some(workspace_b)).await;
+    repo_b.migrate().await.unwrap();
+    repo_b.create_workspace(workspace_b).await.unwrap();
+
+    let clock = SystemClock;
+    let ids_a = FixedIds {
+        doc: doc_a_id,
+        revs: vec![rev_a_id],
+        idx: std::cell::Cell::new(0),
+    };
+    let ids_b = FixedIds {
+        doc: doc_b_id,
+        revs: vec![rev_b_id],
+        idx: std::cell::Cell::new(0),
+    };
+
+    let created_a = create_document(
+        &mut repo_a,
+        &clock,
+        &ids_a,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "a"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.1, 0.2, 0.3]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let _created_b = create_document(
+        &mut repo_b,
+        &clock,
+        &ids_b,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"workspace": "b"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.4, 0.5, 0.6]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    repo_a.flush_vector_mirror_queue().await.unwrap();
+    repo_b.flush_vector_mirror_queue().await.unwrap();
+
+    let out = query_vector_documents(
+        &repo_a,
+        QueryVectorInput {
+            embedding: vec![0.1, 0.2, 0.3],
+            where_: Map::new(),
+            select: vec!["id".to_string()],
+            limit: Some(10),
+        },
+    )
+        .await
+        .unwrap();
+
+    let result_ids = out
+        .rows
+        .iter()
+        .map(|row| row.get("id").unwrap().as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(result_ids, vec![created_a.document.id.to_string()]);
+
+    let requests = requests.lock().unwrap();
+    assert!(requests.iter().any(|request| {
+        request.starts_with(&format!(
+            "POST /collections/docracy_workspace_{}",
+            workspace_a
+        ))
+    }));
+
+    let search_request = requests
+        .iter()
+        .find(|request| request.contains("/points/search"))
+        .expect("qdrant search request");
+    assert!(
+        search_request.contains("\"limit\":50"),
+        "expected candidate multiplier limit; got request={search_request}"
+    );
+
+    std::env::remove_var("QDRANT_URL");
+    server.join().unwrap();
+}
+
+#[tokio::test]
+async fn vector_search_excludes_archived_documents_from_results() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace = Uuid::from_u128(0xC3);
+    let doc_id = docracy_core::DocumentId(Uuid::from_u128(0xC30));
+    let rev1 = docracy_core::RevisionId(Uuid::from_u128(0xC31));
+    let rev2 = docracy_core::RevisionId(Uuid::from_u128(0xC32));
+
+    let search_body = format!(r#"{{"result":[{{"id":"{}","score":0.99}}]}}"#, doc_id.0);
+    let (qdrant_url, _requests, server) = start_qdrant_mock(Box::leak(search_body.into_boxed_str()), 7);
+    std::env::set_var("QDRANT_URL", &qdrant_url);
+
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = FixedIds {
+        doc: doc_id,
+        revs: vec![rev1, rev2],
+        idx: std::cell::Cell::new(0),
+    };
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"state": "active"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.7, 0.8, 0.9]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    repo.flush_vector_mirror_queue().await.unwrap();
+
+    let archived = update_document(
+        &mut repo,
+        &clock,
+        &ids,
+        UpdateDocumentInput {
+            id: created.document.id,
+            expected_head: created.revision.id,
+            content: None,
+            extensions: None,
+            status: Some(DocumentStatus::ARCHIVED.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(archived.document.status.as_str(), DocumentStatus::ARCHIVED);
+
+    repo.flush_vector_mirror_queue().await.unwrap();
+
+    let out = query_vector_documents(
+        &repo,
+        QueryVectorInput {
+            embedding: vec![0.7, 0.8, 0.9],
+            where_: Map::new(),
+            select: vec!["id".to_string()],
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(out.rows.is_empty());
+
+    std::env::remove_var("QDRANT_URL");
+    server.join().unwrap();
+}
+
+#[tokio::test]
+async fn vector_mirror_flush_and_search_against_live_qdrant() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let qdrant_url = std::env::var("QDRANT_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:6333".to_string())
+        .trim_end_matches('/')
+        .to_string();
+
+    let workspace = Uuid::from_u128(0xD4);
+    let doc_id = docracy_core::DocumentId(Uuid::from_u128(0xD40));
+    let rev_id = docracy_core::RevisionId(Uuid::from_u128(0xD41));
+
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = FixedIds {
+        doc: doc_id,
+        revs: vec![rev_id],
+        idx: std::cell::Cell::new(0),
+    };
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"state": "live"}),
+            extensions: serde_json::Map::from_iter([(
+                "embedding".to_string(),
+                json!([0.11, 0.22, 0.33]),
+            )]),
+        },
+    )
+    .await
+    .unwrap();
+
+    repo.flush_vector_mirror_queue().await.unwrap();
+
+    let collection = format!("docracy_workspace_{}", workspace);
+    let response = reqwest::Client::new()
+        .get(format!("{qdrant_url}/collections/{collection}"))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+
+    let out = query_vector_documents(
+        &repo,
+        QueryVectorInput {
+            embedding: vec![0.11, 0.22, 0.33],
+            where_: Map::new(),
+            select: vec!["id".to_string()],
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(out.rows[0].get("id"), Some(&json!(created.document.id.to_string())));
 }
 
 #[tokio::test]

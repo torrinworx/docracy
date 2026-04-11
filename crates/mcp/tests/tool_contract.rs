@@ -32,7 +32,14 @@ async fn tools_list_is_stable() {
             let mut names: Vec<String> = tools.into_iter().map(|t| t.name.to_string()).collect();
             names.sort();
 
-            assert_eq!(names, vec!["create", "init", "query", "read", "update"]);
+            assert_eq!(names, vec![
+                "create",
+                "init",
+                "query",
+                "query_vector",
+                "read",
+                "update",
+            ]);
 
             // Best-effort cleanup; don't let shutdown hang the test suite.
             let _ = server.close_with_timeout(Duration::from_millis(250)).await;

@@ -257,3 +257,36 @@ impl Repository for MemoryRepository {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::query::DocumentQueryOrder;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn vector_queries_default_to_unsupported_storage_error() {
+        let repo = MemoryRepository::new();
+        let err = repo
+            .query_vector_documents(
+                crate::query::DocumentQuery {
+                    query: None,
+                    types: None,
+                    statuses: None,
+                    archived: None,
+                    deleted: None,
+                    created_gte: None,
+                    created_lte: None,
+                    modified_gte: None,
+                    modified_lte: None,
+                    order: DocumentQueryOrder::ModifiedDesc,
+                    limit: 10,
+                    cursor: None,
+                },
+                vec![0.1, 0.2, 0.3],
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, RepoError::Storage(message) if message.contains("vector query execution is not supported")));
+    }
+}

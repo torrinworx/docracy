@@ -89,7 +89,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -102,7 +102,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 7. Custom SQL Query Strings | 0/2 | Planned | - |
 | 8. Workspace tenancy via MCP session binding | 0/2 | Complete    | 2026-04-08 |
 | 9. CLI Workspace Create Command | 0/1 | Planned | - |
-| 10. Task-scoped init contexts | 0/3 | Planned | - |
+| 10. Task-scoped init contexts | 3/3 | Complete    | 2026-04-09 |
+| 11. Refresh README usage docs | 2/2 | Complete   | 2026-04-09 |
+| 12. Vector mirror helper and vector query support | 2/2 | Complete   | 2026-04-10 |
+| 13. Async Ollama Embedding Worker and Qdrant-Only Vector Index | 2/2 | Complete   | 2026-04-10 |
 
 ## Archived Milestones
 
@@ -155,9 +158,55 @@ Plans:
 **Goal**: Init remains contract-preserving (returns all active `context` docs) while also returning an additive task-scoped subset derived from `extensions.task_scopes` so agents can request a specialty init context without new tools.
 **Requirements**: TBD
 **Depends on:** Phase 9
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
-- [ ] 10-01-PLAN.md — Core: compute and return task-scoped context subset (without filtering active contexts)
-- [ ] 10-02-PLAN.md — CLI: wire DOCRACY_TASK_SCOPE and document Init output
-- [ ] 10-03-PLAN.md — MCP: runtime task scope + Init tool output + MCP docs
+- [x] 10-01-PLAN.md — Core: compute and return task-scoped context subset (without filtering active contexts)
+- [x] 10-02-PLAN.md — CLI: wire DOCRACY_TASK_SCOPE and document Init output
+- [x] 10-03-PLAN.md — MCP: runtime task scope + Init tool output + MCP docs
+
+### Phase 11: Refresh README usage docs
+
+**Goal**: The root README and MCP README accurately describe the current shipped usage surface, including task-scoped init, workspace bootstrap, and startup env vars.
+**Requirements**: DOC-01
+**Depends on:** Phase 10
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 11-01: Refresh root README current-state and usage sections
+- [x] 11-02: Refresh MCP README contract and startup sections
+
+### Phase 12: Vector mirror helper and vector query support
+
+**Goal**: Postgres remains the source of truth while workspace-scoped vector snapshots are mirrored into Qdrant, archive/delete state stays aligned in both stores, and vector queries return only the active workspace's current documents.
+**Requirements**: VEC-01
+**Depends on:** Phase 11
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 12-01: Define vector mirror contract and Postgres queue for Qdrant sync
+- [x] 12-02: Add Qdrant dispatch, vector query hydration, and archive/workspace regression coverage
+
+### Phase 13: Async Ollama Embedding Worker and Qdrant-Only Vector Index
+
+**Goal**: Postgres document writes enqueue workspace-scoped embedding jobs for an async Ollama worker, and Qdrant remains the only derived vector index while Postgres stays canonical for document state.
+**Requirements**: IDX-01, IDX-02, IDX-03
+**Depends on:** Phase 12
+**Plans:** 2/2 plans complete
+
+Plans:
+- [x] 13-01: Async embedding job contract + queue schema
+- [x] 13-02: Ollama worker loop + Qdrant indexing runtime
+
+### Phase 14: Split query into Postgres-only; add query_vector with auto-embedding and Qdrant options
+
+**Goal**: Agents can run Postgres-only guided/raw queries via `query`, and can run semantic search via a dedicated `query_vector` operation that auto-embeds query text (Ollama) and ranks via Qdrant while hydrating results from Postgres.
+**Requirements**: TBD
+**Depends on:** Phase 13
+**Plans**: 4 plans
+
+Plans:
+- [x] 14-01-PLAN.md — Core: split Postgres query vs vector query contracts
+- [x] 14-02-PLAN.md — Postgres: Ollama embed helper + vector query test migration
+- [x] 14-03-PLAN.md — CLI: add `query-vector` subcommand with auto-embedding
+- [x] 14-04-PLAN.md — MCP: add `query_vector` tool + update `query` schema/docs

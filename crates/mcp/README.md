@@ -4,11 +4,13 @@ This crate exposes the shipped Docracy contract (Init/Create/Read/Query/Update) 
 
 ## Workspace Binding
 
-The MCP server can run in either shared/global mode or workspace-bound mode.
+The MCP server runs in either shared/global mode or workspace-bound mode.
 
-- If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full lifetime of the MCP session.
-- If `WORKSPACE_ID` is omitted, the server stays in the shared/global path.
-- Project-scoped OpenCode config should provide `WORKSPACE_ID` from client environment (for example `DOCRACY_WORKSPACE_ID`), not by inferring identity from the repository path.
+- If `WORKSPACE_ID` is set at startup, the process binds that workspace UUID for the full MCP session.
+- If `WORKSPACE_ID` is omitted, the server stays on the shared/global path.
+- `DOCRACY_TASK_SCOPE` is optional and additive; it only narrows the Init convenience subset.
+- `context_documents` remains the full active set.
+- `task_context_documents` is filtered via `extensions.task_scopes` on context documents.
 - Shared/global governance remains readable in both modes; workspace-scoped sessions see their workspace plus the shared governance rows.
 - Startup still uses the fixed repo-owned `./governance` bundle.
 
@@ -20,6 +22,7 @@ Tool names are stable:
 - `create`
 - `read`
 - `query`
+- `query_vector`
 - `update`
 
 The JSON shapes are intentionally aligned with the existing CLI/core contract.
@@ -33,7 +36,9 @@ Output:
 ```json
 {
   "governance": { "files": [{ "name": "...", "content": "..." }] },
-  "context_documents": []
+  "context_documents": [],
+  "task_scope": null,
+  "task_context_documents": []
 }
 ```
 
@@ -67,7 +72,7 @@ Output:
 
 ### `query`
 
-Input: `docracy_core::query::QueryInput`
+Input: `docracy_core::query::QueryInput` (Postgres-only: guided filters + raw SQL; no vector embedding field)
 
 ```json
 {
@@ -77,7 +82,7 @@ Input: `docracy_core::query::QueryInput`
 }
 ```
 
-If `sql` is present, it takes precedence over `query`/`where`/`order_by`/`select`. Raw SQL runs read-only and is clamped to 100 rows and 5000ms.
+If `sql` is present, it takes precedence over `query`/`where`/`order_by`/`select`. raw SQL runs read-only and is clamped to 100 rows and 5000ms.
 
 Guided fallback example:
 
@@ -93,6 +98,35 @@ Guided fallback example:
 ```
 
 Output: `QueryResult` serialized to JSON (same as CLI)
+
+### `query_vector`
+
+Input: explicit embedding or auto-embedding from query text.
+
+Explicit embedding:
+
+```json
+{
+  "embedding": [0.1, 0.2, 0.3],
+  "where": {},
+  "select": ["id"],
+  "limit": 10
+}
+```
+
+Auto-embedding:
+
+```json
+{
+  "query": "find docs about postgres",
+  "embed_model": "embeddinggemma",
+  "where": {},
+  "select": ["id", "type", "status"],
+  "limit": 10
+}
+```
+
+Output: `QueryResult` serialized to JSON (same row shape as `query`).
 
 ### `update`
 
@@ -121,6 +155,7 @@ Output:
 - The tool inputs/outputs intentionally mirror the CLI JSON contract.
 - `init` is a tool call, but server startup configuration (database URL, fixed repo-owned `./governance` bundle, migration policy) is handled at process startup rather than via tool parameters.
 - Workspace binding is also handled at process startup through `WORKSPACE_ID`, so client config can select a tenant without adding a tool argument.
+- Task-scoped init context selection is handled at process startup through `DOCRACY_TASK_SCOPE`, so clients can receive both the full active context set and the filtered task subset without adding a tool argument.
 
 ## Error Contract
 

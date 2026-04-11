@@ -53,6 +53,22 @@ async fn query_documents_delegates_to_core() {
     );
 }
 
+#[test]
+fn query_vector_args_rejects_missing_query_and_embedding() {
+    let err = docracy_mcp::tools::QueryVectorArgs {
+        query: None,
+        embedding: None,
+        embed_model: None,
+        where_: std::collections::BTreeMap::new(),
+        select: vec![],
+        limit: None,
+    }
+    .validate()
+    .unwrap_err();
+
+    assert_eq!(err.kind, McpErrorKind::ValidationError);
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn update_revision_conflict_maps_to_machine_readable_details() {
     let clock = SystemClock;
@@ -123,5 +139,8 @@ fn workspace_not_provisioned_maps_to_machine_readable_details() {
 
     assert_eq!(err.kind, McpErrorKind::WorkspaceNotProvisioned);
     let details = err.details.expect("expected structured details");
-    assert_eq!(details.get("workspace_id"), Some(&serde_json::json!(workspace_id)));
+    assert_eq!(
+        details.get("workspace_id"),
+        Some(&serde_json::json!(workspace_id))
+    );
 }
