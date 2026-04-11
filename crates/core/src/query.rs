@@ -29,6 +29,32 @@ pub struct QueryInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct QueryVectorInput {
+    pub embedding: Vec<f32>,
+
+    #[serde(rename = "where", default)]
+    pub where_: Map<String, Value>,
+
+    #[serde(default)]
+    pub select: Vec<String>,
+
+    pub limit: Option<u32>,
+}
+
+impl QueryVectorInput {
+    pub fn parse(
+        self,
+    ) -> ValidationResult<(
+        DocumentQuery,
+        Vec<SelectField>,
+        Map<String, Value>,
+        Vec<f32>,
+    )> {
+        todo!("implemented in Task 2")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QueryOrderByInput {
     pub field: String,
     pub direction: String,

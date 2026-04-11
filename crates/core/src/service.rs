@@ -4,6 +4,7 @@ use crate::governance::{GovernanceBundle, GovernanceSource};
 use crate::ids::{DocumentId, RevisionId};
 use crate::query::{
     encode_cursor, project_rows, GuidedQueryInput, QueryExecution, QueryInput, QueryResult,
+    QueryVectorInput,
 };
 use crate::repository::Repository;
 use crate::revision::DocumentRevision;
@@ -154,6 +155,13 @@ pub async fn query_documents(
             })
         }
     }
+}
+
+pub async fn query_vector_documents(
+    _repo: &dyn Repository,
+    _input: QueryVectorInput,
+) -> Result<QueryResult, CoreError> {
+    todo!("implemented in Task 2")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1284,6 +1292,53 @@ mod tests {
         assert_eq!(out.applied_where, Map::new());
         assert_eq!(out.next_cursor, None);
         assert_eq!(out.rows[0].get("id"), Some(&json!("raw-1")));
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn query_vector_documents_hydrates_in_ranked_order() {
+        let t0 = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).unwrap();
+        let doc_a = fixtures::seeded_document(
+            DocumentId(Uuid::from_u128(500)),
+            RevisionId(Uuid::from_u128(501)),
+            t0,
+            json!({"name": "alpha"}),
+        )
+        .0;
+        let doc_b = fixtures::seeded_document(
+            DocumentId(Uuid::from_u128(600)),
+            RevisionId(Uuid::from_u128(601)),
+            t0,
+            json!({"name": "bravo"}),
+        )
+        .0;
+
+        let repo = RecordingVectorRepository {
+            vector_documents: vec![doc_b.clone(), doc_a.clone()],
+            documents: vec![doc_a.clone(), doc_b.clone()],
+            ..Default::default()
+        };
+
+        let out = query_vector_documents(
+            &repo,
+            QueryVectorInput {
+                embedding: vec![0.25, 0.5, 0.75],
+                where_: Map::new(),
+                select: vec!["id".to_string()],
+                limit: Some(10),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(repo.vector_calls.get(), 1);
+        assert_eq!(repo.get_documents_calls.get(), 1);
+        assert_eq!(out.next_cursor, None);
+        let ids = out
+            .rows
+            .iter()
+            .map(|row| row.get("id").unwrap().as_str().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec![doc_b.id.to_string(), doc_a.id.to_string()]);
     }
 
     // Vector query behavior is tested via the dedicated `query_vector_documents` use-case.
