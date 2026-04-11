@@ -4,6 +4,8 @@ use serde_json::{json, Value};
 use sqlx::types::Uuid;
 use uuid::Uuid as WorkspaceUuid;
 
+const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
+const DEFAULT_OLLAMA_EMBED_MODEL: &str = "embeddinggemma";
 const DEFAULT_QDRANT_URL: &str = "http://127.0.0.1:6333";
 
 #[derive(sqlx::FromRow)]
@@ -221,6 +223,65 @@ pub(crate) async fn qdrant_search_point_ids(
     QdrantClient::new()
         .search_point_ids(collection, embedding, limit)
         .await
+}
+
+pub async fn ollama_embed_text(
+    input: &str,
+    embed_model: Option<&str>,
+) -> Result<Vec<f32>, RepoError> {
+    let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
+    let model = match embed_model {
+        Some(model) => model.to_string(),
+        None => std::env::var("OLLAMA_EMBED_MODEL")
+            .unwrap_or_else(|_| DEFAULT_OLLAMA_EMBED_MODEL.to_string()),
+    };
+
+    let url = format!("{}/api/embed", ollama_url.trim_end_matches('/'));
+    let response = reqwest::Client::new()
+        .post(&url)
+        .json(&json!({
+            "model": model,
+            "input": input,
+        }))
+        .send()
+        .await
+        .map_err(|e| RepoError::Storage(format!("ollama embed request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(RepoError::Storage(format!(
+            "ollama embed failed: {status} {body}"
+        )));
+    }
+
+    let value: Value = response
+        .json()
+        .await
+        .map_err(|e| RepoError::Storage(format!("ollama embed response parse failed: {e}")))?;
+
+    let embedding = value
+        .get("embeddings")
+        .and_then(|value| value.as_array())
+        .and_then(|embeddings| embeddings.first())
+        .and_then(|value| value.as_array())
+        .ok_or_else(|| RepoError::Storage("ollama embed response missing embeddings".to_string()))?;
+
+    let mut vector = Vec::with_capacity(embedding.len());
+    for value in embedding {
+        let number = value.as_f64().ok_or_else(|| {
+            RepoError::Storage("ollama embed response must contain numeric vectors".to_string())
+        })?;
+        vector.push(number as f32);
+    }
+
+    if vector.is_empty() {
+        return Err(RepoError::Storage(
+            "ollama embed response must not be empty".to_string(),
+        ));
+    }
+
+    Ok(vector)
 }
 
 impl PgRepository {

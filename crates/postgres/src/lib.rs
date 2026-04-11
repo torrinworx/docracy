@@ -20,6 +20,7 @@ use sqlx::types::Uuid;
 use uuid::Uuid as WorkspaceUuid;
 
 pub use vector::qdrant_collection_name;
+pub use vector::ollama_embed_text;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
