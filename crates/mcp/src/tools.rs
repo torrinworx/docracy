@@ -191,7 +191,6 @@ pub struct ReadArgs {
 pub struct QueryArgs {
     pub query: Option<String>,
     pub sql: Option<String>,
-    pub embedding: Option<Vec<f32>>,
     pub timeout_ms: Option<u64>,
 
     #[serde(rename = "where", default)]
@@ -234,7 +233,6 @@ impl QueryArgs {
         docracy_core::query::QueryInput {
             query: self.query,
             sql: self.sql,
-            embedding: self.embedding,
             timeout_ms: self.timeout_ms,
             where_: self.where_.into_iter().collect(),
             order_by: self
@@ -249,6 +247,28 @@ impl QueryArgs {
             limit: self.limit,
             cursor: self.cursor,
         }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct QueryVectorArgs {
+    pub query: Option<String>,
+    pub embedding: Option<Vec<f32>>,
+    pub embed_model: Option<String>,
+
+    #[serde(rename = "where", default)]
+    pub where_: BTreeMap<String, Value>,
+
+    #[serde(default)]
+    pub select: Vec<String>,
+
+    pub limit: Option<u32>,
+}
+
+impl QueryVectorArgs {
+    pub fn validate(&self) -> Result<(), McpError> {
+        // Implemented in 14-04 Task 1.
+        Ok(())
     }
 }
 

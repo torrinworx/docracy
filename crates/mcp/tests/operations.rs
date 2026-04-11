@@ -34,7 +34,6 @@ async fn query_documents_delegates_to_core() {
         docracy_core::QueryInput {
             query: None,
             sql: None,
-            embedding: None,
             timeout_ms: None,
             where_: Map::new(),
             order_by: vec![],
@@ -52,6 +51,22 @@ async fn query_documents_delegates_to_core() {
         out.rows[0].get("id"),
         Some(&Value::String(created.document.id.to_string()))
     );
+}
+
+#[test]
+fn query_vector_args_rejects_missing_query_and_embedding() {
+    let err = docracy_mcp::tools::QueryVectorArgs {
+        query: None,
+        embedding: None,
+        embed_model: None,
+        where_: std::collections::BTreeMap::new(),
+        select: vec![],
+        limit: None,
+    }
+    .validate()
+    .unwrap_err();
+
+    assert_eq!(err.kind, McpErrorKind::ValidationError);
 }
 
 #[tokio::test(flavor = "current_thread")]
