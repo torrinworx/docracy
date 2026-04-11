@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
 status: unknown
-stopped_at: Completed 13-02-PLAN.md
-last_updated: "2026-04-10T23:50:50.920Z"
+stopped_at: Completed 14-01-PLAN.md
+last_updated: "2026-04-11T01:00:38.623Z"
 progress:
-  total_phases: 16
+  total_phases: 17
   completed_phases: 14
-  total_plans: 27
-  completed_plans: 28
+  total_plans: 31
+  completed_plans: 29
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 12 — vector-mirror-helper-and-vector-query-support
+**Current focus:** Phase 14 — split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options
 
 ## Current Position
 
-Phase: 12 (vector-mirror-helper-and-vector-query-support) — EXECUTING
-Plan: 2 of 2
+Phase: 14 (split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options) — EXECUTING
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -74,6 +74,7 @@ Plan: 2 of 2
 | Phase 12-vector-mirror-helper-and-vector-query-support P02 | 22 min | 3 tasks | 9 files |
 | Phase 13 P01 | 25 min | 3 tasks | 5 files |
 | Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index P02 | 8 min | 3 tasks | 9 files |
+| Phase 14 P01 | 5m | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -149,6 +150,7 @@ Recent decisions affecting current work:
 - [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Workspace scope stays explicit through WORKSPACE_ID instead of guessing tenant context.
 - [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Derived vectors remain rebuildable by keeping model and tombstone metadata in Qdrant payloads.
 - [Phase 13-async-ollama-embedding-worker-and-qdrant-only-vector-index]: Failure handling keeps jobs retryable rather than treating embed or upsert errors as terminal.
+- [Phase 14]: Make vector search explicit by removing embedding routing from QueryInput and introducing QueryVectorInput + query_vector_documents
 
 ### Milestone Setup
 
@@ -188,6 +190,6 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-04-10T23:50:50.917Z
-Stopped at: Completed 13-02-PLAN.md
+Last session: 2026-04-11T01:00:38.621Z
+Stopped at: Completed 14-01-PLAN.md
 Resume file: None
