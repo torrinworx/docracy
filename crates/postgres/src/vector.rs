@@ -393,4 +393,40 @@ mod tests {
         assert!(captured[2].contains(&format!("\"id\":\"{}\"", row.document_id)));
         assert!(captured[3].contains(&format!("\"id\":\"{}\"", row.document_id)));
     }
+
+    #[tokio::test]
+    async fn ollama_embed_text_sends_embed_request_and_returns_embedding() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let captured = Arc::new(Mutex::new(Vec::<String>::new()));
+        let captured_server = Arc::clone(&captured);
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let request = read_http_request(&mut stream);
+            captured_server.lock().expect("capture lock").push(request);
+            respond(
+                &mut stream,
+                "200 OK",
+                r#"{"embeddings":[[0.1,0.2,0.3]]}"#,
+            );
+        });
+
+        std::env::set_var("OLLAMA_URL", format!("http://{addr}"));
+
+        let embedding = super::ollama_embed_text("hello", Some("test-model"))
+            .await
+            .unwrap();
+
+        std::env::remove_var("OLLAMA_URL");
+
+        assert_eq!(embedding, vec![0.1, 0.2, 0.3]);
+
+        server.join().expect("server thread");
+
+        let captured = captured.lock().expect("captured requests");
+        assert!(captured[0].starts_with("POST /api/embed"));
+        assert!(captured[0].contains("\"model\":\"test-model\""));
+        assert!(captured[0].contains("\"input\":\"hello\""));
+    }
 }
