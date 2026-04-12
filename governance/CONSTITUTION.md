@@ -30,6 +30,7 @@ It stores typed documents with immutable revision history, safe concurrency, and
 2. Use `read` only for the small set of documents that matter.
 3. Use `create` to record new durable memory (non-governance types only).
 4. Use `update` to change an existing document by creating a new revision.
+5. Use `query_vector` to discover via semantic search.
 
 ## Updates And Concurrency
 

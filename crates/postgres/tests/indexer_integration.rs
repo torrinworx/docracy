@@ -55,6 +55,10 @@ impl SchemaGuard {
 
         Self { admin_pool, schema }
     }
+
+    fn schema(&self) -> &str {
+        &self.schema
+    }
 }
 
 impl Drop for SchemaGuard {
@@ -215,7 +219,6 @@ fn start_qdrant_mock(request_limit: usize) -> (String, Arc<Mutex<Vec<String>>>, 
 #[test]
 fn indexer_config_reads_worker_env() {
     let _env_guard = env_lock().lock().unwrap();
-    set_env("WORKSPACE_ID", "00000000-0000-0000-0000-000000000001");
     set_env("OLLAMA_URL", "http://127.0.0.1:11434");
     set_env("OLLAMA_EMBED_MODEL", "embeddinggemma");
     set_env("QDRANT_URL", "http://127.0.0.1:6333");
@@ -224,10 +227,6 @@ fn indexer_config_reads_worker_env() {
 
     let config = IndexerConfig::from_env().expect("config should parse");
 
-    assert_eq!(
-        config.workspace_id.to_string(),
-        "00000000-0000-0000-0000-000000000001"
-    );
     assert_eq!(config.ollama_url, "http://127.0.0.1:11434");
     assert_eq!(config.ollama_embed_model, "embeddinggemma");
     assert_eq!(config.qdrant_url, "http://127.0.0.1:6333");
@@ -235,10 +234,80 @@ fn indexer_config_reads_worker_env() {
     assert_eq!(config.batch_size, 8);
 }
 
+#[tokio::test]
+async fn indexer_processes_multiple_workspaces_from_one_worker() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let _env_guard = env_lock().lock().unwrap();
+
+    let schema = unique_schema_name();
+    let schema_guard = SchemaGuard::create(&url, schema.clone()).await;
+    let mut repo_a = repo_on_schema(&url, schema_guard.schema().to_string(), Some(Uuid::new_v4())).await;
+    let mut repo_b = repo_on_schema(&url, schema_guard.schema().to_string(), Some(Uuid::new_v4())).await;
+    let worker_repo = repo_on_schema(&url, schema_guard.schema().to_string(), None).await;
+
+    worker_repo.migrate().await.unwrap();
+
+    let workspace_a = Uuid::new_v4();
+    let workspace_b = Uuid::new_v4();
+    repo_a.create_workspace(workspace_a).await.unwrap();
+    repo_b.create_workspace(workspace_b).await.unwrap();
+
+    let doc_a = seed_embedding_job(&mut repo_a, json!({"body": "alpha"})).await;
+    let doc_b = seed_embedding_job(&mut repo_b, json!({"body": "beta"})).await;
+
+    let (ollama_url, _ollama_requests, ollama_server) = start_ollama_mock(
+        r#"{"model":"embeddinggemma","embeddings":[[0.1,0.2,0.3]]}"#,
+        4,
+    );
+    let (qdrant_url, qdrant_requests, qdrant_server) = start_qdrant_mock(4);
+
+    set_env("OLLAMA_URL", &ollama_url);
+    set_env("OLLAMA_EMBED_MODEL", "embeddinggemma");
+    set_env("QDRANT_URL", &qdrant_url);
+
+    let config = IndexerConfig::from_env().unwrap();
+    let runtime = IndexerRuntime::new(worker_repo, config);
+
+    runtime.process_once().await.unwrap();
+
+    let requests = qdrant_requests.lock().unwrap();
+    assert!(requests.iter().any(|request| {
+        request.starts_with(&format!("PUT /collections/docracy_workspace_{}", workspace_a))
+    }));
+    assert!(requests.iter().any(|request| {
+        request.starts_with(&format!("PUT /collections/docracy_workspace_{}", workspace_b))
+    }));
+
+    let remaining_a: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM embedding_job_queue WHERE workspace_id = $1 AND document_id = $2",
+    )
+    .bind(workspace_a)
+    .bind(doc_a.0)
+    .fetch_one(runtime.repo().pool())
+    .await
+    .unwrap();
+    let remaining_b: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM embedding_job_queue WHERE workspace_id = $1 AND document_id = $2",
+    )
+    .bind(workspace_b)
+    .bind(doc_b.0)
+    .fetch_one(runtime.repo().pool())
+    .await
+    .unwrap();
+
+    assert_eq!(remaining_a, 0);
+    assert_eq!(remaining_b, 0);
+
+    ollama_server.join().unwrap();
+    qdrant_server.join().unwrap();
+}
+
 #[test]
 fn indexer_config_rejects_blank_embed_model() {
     let _env_guard = env_lock().lock().unwrap();
-    set_env("WORKSPACE_ID", "00000000-0000-0000-0000-000000000001");
     set_env("OLLAMA_URL", "http://127.0.0.1:11434");
     set_env("OLLAMA_EMBED_MODEL", "   ");
     set_env("QDRANT_URL", "http://127.0.0.1:6333");
@@ -247,11 +316,11 @@ fn indexer_config_rejects_blank_embed_model() {
 }
 
 #[test]
-fn indexer_claim_sql_uses_skip_locked_and_workspace_binding() {
+fn indexer_claim_sql_uses_skip_locked_without_workspace_binding() {
     let sql = IndexerRuntime::claim_pending_jobs_sql();
 
     assert!(sql.contains("FOR UPDATE SKIP LOCKED"));
-    assert!(sql.contains("docracy.workspace_id"));
+    assert!(!sql.contains("docracy.workspace_id"));
     assert!(sql.contains("available_at <= now()"));
 }
 
@@ -282,7 +351,6 @@ async fn indexer_embeds_canonical_source_text_and_upserts_qdrant() {
     let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(ollama_body, 2);
     let (qdrant_url, qdrant_requests, qdrant_server) = start_qdrant_mock(3);
 
-    set_env("WORKSPACE_ID", &workspace_id.to_string());
     set_env("OLLAMA_URL", &ollama_url);
     set_env("OLLAMA_EMBED_MODEL", "embeddinggemma");
     set_env("QDRANT_URL", &qdrant_url);
@@ -338,7 +406,6 @@ async fn indexer_retries_failed_jobs_with_attempt_count_and_error_metadata() {
 
     let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(r#"{"error":"boom"}"#, 2);
 
-    set_env("WORKSPACE_ID", &workspace_id.to_string());
     set_env("OLLAMA_URL", &ollama_url);
     set_env("OLLAMA_EMBED_MODEL", "embeddinggemma");
     set_env("QDRANT_URL", "http://127.0.0.1:1");

@@ -15,11 +15,9 @@ const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
 const DEFAULT_QDRANT_URL: &str = "http://127.0.0.1:6333";
 const DEFAULT_POLL_INTERVAL_MS: u64 = 1000;
 const DEFAULT_BATCH_SIZE: usize = 16;
-const GLOBAL_WORKSPACE_ID: WorkspaceUuid = WorkspaceUuid::from_u128(0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexerConfig {
-    pub workspace_id: WorkspaceUuid,
     pub ollama_url: String,
     pub ollama_embed_model: String,
     pub qdrant_url: String,
@@ -29,19 +27,6 @@ pub struct IndexerConfig {
 
 impl IndexerConfig {
     pub fn from_env() -> Result<Self, RepoError> {
-        let workspace_id = std::env::var("WORKSPACE_ID")
-            .map_err(|_| RepoError::Storage("WORKSPACE_ID is required".to_string()))
-            .and_then(|value| {
-                WorkspaceUuid::parse_str(&value)
-                    .map_err(|e| RepoError::Storage(format!("invalid WORKSPACE_ID: {e}")))
-            })?;
-
-        if workspace_id.is_nil() {
-            return Err(RepoError::Storage(
-                "WORKSPACE_ID must not be the nil UUID".to_string(),
-            ));
-        }
-
         let ollama_url =
             std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
         let ollama_embed_model = require_ollama_embed_model(std::env::var("OLLAMA_EMBED_MODEL").ok())?;
@@ -75,7 +60,6 @@ impl IndexerConfig {
         }
 
         Ok(Self {
-            workspace_id,
             ollama_url,
             ollama_embed_model,
             qdrant_url,
@@ -111,7 +95,7 @@ pub struct IndexerRuntime {
 
 impl IndexerRuntime {
     pub fn startup_banner() -> &'static str {
-        "docracy-indexer: workspace-scoped embedding worker"
+        "docracy-indexer: workspace-agnostic embedding worker"
     }
 
     pub fn claim_pending_jobs_sql() -> &'static str {
@@ -122,8 +106,7 @@ WITH claimed AS (
     archived_at, deleted_at, attempt_count, last_error, available_at,
     claimed_at, created_at, modified_at
   FROM embedding_job_queue
-  WHERE workspace_id = coalesce(current_setting('docracy.workspace_id', true)::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-    AND available_at <= now()
+  WHERE available_at <= now()
     AND claimed_at IS NULL
   ORDER BY available_at ASC, modified_at DESC, document_id ASC
   FOR UPDATE SKIP LOCKED
@@ -145,11 +128,7 @@ RETURNING
 
     pub async fn connect_from_env(database_url: &str) -> Result<Self, RepoError> {
         let config = IndexerConfig::from_env()?;
-        let repo = PgRepository::connect_scoped(
-            database_url,
-            Some(config.workspace_id),
-            config.ollama_embed_model.clone(),
-        )
+        let repo = PgRepository::connect(database_url, config.ollama_embed_model.clone())
             .await
             .map_err(|e| RepoError::Storage(e.to_string()))?;
         Ok(Self {
@@ -224,7 +203,8 @@ RETURNING
     async fn process_claimed_job(&self, job: &ClaimedEmbeddingJob) -> Result<(), RepoError> {
         match self.embed_job(job).await {
             Ok(embedding) => {
-                self.ensure_qdrant_collection(embedding.len()).await?;
+                self.ensure_qdrant_collection(job.workspace_id, embedding.len())
+                    .await?;
                 self.upsert_qdrant_point(job, &embedding).await?;
                 self.complete_job(job).await?;
             }
@@ -288,8 +268,12 @@ RETURNING
         Ok(vector)
     }
 
-    async fn ensure_qdrant_collection(&self, dimension: usize) -> Result<(), RepoError> {
-        let collection = qdrant_collection_name(self.config.workspace_id);
+    async fn ensure_qdrant_collection(
+        &self,
+        workspace_id: WorkspaceUuid,
+        dimension: usize,
+    ) -> Result<(), RepoError> {
+        let collection = qdrant_collection_name(workspace_id);
         let url = format!(
             "{}/collections/{}",
             self.config.qdrant_url.trim_end_matches('/'),
@@ -360,7 +344,7 @@ RETURNING
         job: &ClaimedEmbeddingJob,
         embedding: &[f32],
     ) -> Result<(), RepoError> {
-        let collection = qdrant_collection_name(self.config.workspace_id);
+        let collection = qdrant_collection_name(job.workspace_id);
         let url = format!(
             "{}/collections/{}/points?wait=true",
             self.config.qdrant_url.trim_end_matches('/'),
@@ -439,8 +423,4 @@ WHERE workspace_id = $1 AND document_id = $2 AND embed_model = $3
 
         Ok(())
     }
-}
-
-pub fn default_workspace_id() -> WorkspaceUuid {
-    GLOBAL_WORKSPACE_ID
 }

@@ -2,6 +2,7 @@ use super::{PgRepository, map_sqlx_error, vector_embedding_from_value};
 use docracy_core::errors::RepoError;
 use serde_json::{Value, json};
 use sqlx::types::Uuid;
+use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid as WorkspaceUuid;
 
 const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
@@ -296,6 +297,54 @@ pub(crate) async fn qdrant_search_point_ids(
     QdrantClient::new()
         .search_point_ids_with_recovery(collection, embedding, limit)
         .await
+}
+
+pub(crate) async fn upsert_qdrant_document_embedding(
+    workspace_id: WorkspaceUuid,
+    document_id: Uuid,
+    revision_id: Uuid,
+    archived_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    embedding: &[f32],
+    embed_model: &str,
+) -> Result<(), RepoError> {
+    let collection = qdrant_collection_name(workspace_id);
+    let qdrant = QdrantClient::new();
+
+    qdrant.ensure_collection(&collection, embedding.len()).await?;
+
+    let url = qdrant_points_url(&qdrant.base_url, &collection);
+    let response = qdrant
+        .client
+        .put(&url)
+        .json(&json!({
+            "points": [{
+                "id": document_id.to_string(),
+                "vector": embedding,
+                "payload": {
+                    "workspace_id": workspace_id.to_string(),
+                    "document_id": document_id.to_string(),
+                    "revision_id": revision_id.to_string(),
+                    "embed_model": embed_model,
+                    "archived_at": archived_at.map(|value| value.to_rfc3339()),
+                    "deleted_at": deleted_at.map(|value| value.to_rfc3339()),
+                    "embedding_dimension": embedding.len(),
+                }
+            }]
+        }))
+        .send()
+        .await
+        .map_err(|e| qdrant_storage_error(e.to_string()))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(qdrant_storage_error(format!(
+            "Qdrant upsert failed: {status} {body}"
+        )));
+    }
+
+    Ok(())
 }
 
 pub async fn ollama_embed_text(

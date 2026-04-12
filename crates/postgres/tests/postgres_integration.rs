@@ -487,6 +487,35 @@ fn start_qdrant_mock(
     (format!("http://{addr}"), captured, handle)
 }
 
+fn start_ollama_mock(
+    response_body: &'static str,
+    request_limit: usize,
+) -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    std::thread::JoinHandle<()>,
+) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind ollama mock");
+    let addr = listener.local_addr().expect("mock addr");
+    let captured = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let captured_server = std::sync::Arc::clone(&captured);
+
+    let handle = std::thread::spawn(move || {
+        for _ in 0..request_limit {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let request = read_http_request(&mut stream);
+            captured_server
+                .lock()
+                .expect("capture lock")
+                .push(request.clone());
+
+            write_http_response(&mut stream, "200 OK", response_body);
+        }
+    });
+
+    (format!("http://{addr}"), captured, handle)
+}
+
 struct FixedIds {
     doc: docracy_core::DocumentId,
     revs: Vec<docracy_core::RevisionId>,
@@ -593,6 +622,83 @@ async fn vector_mirror_queue_tracks_current_snapshot_in_place() {
     assert!(rows[0].deleted_at.is_none());
     assert_eq!(rows[0].embedding_dimension, 3);
     assert_eq!(rows[0].embedding, json!([9.0, 8.0, 7.0]));
+}
+
+#[tokio::test]
+async fn create_document_indexes_content_embedding_immediately() {
+    let Some(url) = database_url() else {
+        return;
+    };
+
+    let workspace = Uuid::from_u128(0xE5);
+    let doc_id = docracy_core::DocumentId(Uuid::from_u128(0xE50));
+    let rev_id = docracy_core::RevisionId(Uuid::from_u128(0xE51));
+    let search_body = format!(r#"{{"result":[{{"id":"{}","score":0.99}}]}}"#, doc_id.0);
+    let (ollama_url, ollama_requests, ollama_server) =
+        start_ollama_mock(r#"{"embeddings":[[0.9,0.1,0.2]]}"#, 1);
+    let (qdrant_url, qdrant_requests, qdrant_server) =
+        start_qdrant_mock(Box::leak(search_body.into_boxed_str()), 4);
+
+    let _env_guard = env_lock().lock().unwrap();
+    unsafe {
+        std::env::set_var("OLLAMA_URL", &ollama_url);
+        std::env::set_var("QDRANT_URL", &qdrant_url);
+    }
+
+    let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace)).await;
+    repo.migrate().await.unwrap();
+    repo.create_workspace(workspace).await.unwrap();
+
+    let clock = SystemClock;
+    let ids = FixedIds {
+        doc: doc_id,
+        revs: vec![rev_id],
+        idx: std::cell::Cell::new(0),
+    };
+
+    let created = create_document(
+        &mut repo,
+        &clock,
+        &ids,
+        NewDocument {
+            doc_type: DocumentType::new("general").unwrap(),
+            content: json!({"body": "birds sing from rooftops"}),
+            extensions: serde_json::Map::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let out = query_vector_documents(
+        &repo,
+        QueryVectorInput {
+            embedding: vec![0.9, 0.1, 0.2],
+            where_: Map::new(),
+            select: vec!["id".to_string()],
+            limit: Some(10),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(out.rows.len(), 1);
+    assert_eq!(out.rows[0].get("id"), Some(&json!(created.document.id.to_string())));
+
+    let requests = ollama_requests.lock().unwrap();
+    assert!(requests[0].starts_with("POST /api/embed"));
+    assert!(requests[0].contains("\"model\":\"embeddinggemma\""));
+    assert!(requests[0].contains("\"input\":\"{\\\"body\\\":\\\"birds sing from rooftops\\\"}\""));
+
+    let requests = qdrant_requests.lock().unwrap();
+    assert!(requests.iter().any(|request| {
+        request.starts_with(&format!(
+            "PUT /collections/docracy_workspace_{workspace}/points?wait=true"
+        ))
+    }));
+    assert!(requests.iter().any(|request| request.contains(&created.document.id.to_string())));
+
+    ollama_server.join().unwrap();
+    qdrant_server.join().unwrap();
 }
 
 #[tokio::test]

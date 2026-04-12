@@ -5,7 +5,19 @@ use docracy_postgres::PgRepository;
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::types::chrono::{DateTime, Utc};
+use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
+
+fn set_env(key: &str, value: &str) {
+    unsafe {
+        std::env::set_var(key, value);
+    }
+}
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
 
 fn database_url() -> Option<String> {
     std::env::var("DOCRACY_TEST_DATABASE_URL")
@@ -117,6 +129,9 @@ async fn embedding_queue_overwrites_pending_job_in_place() {
         return;
     };
 
+    let _env_guard = env_lock().lock().unwrap();
+    set_env("OLLAMA_URL", "http://127.0.0.1:1");
+
     let workspace_id = Uuid::new_v4();
     let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
     repo.migrate().await.unwrap();
@@ -180,6 +195,9 @@ async fn embedding_queue_reflects_deleted_state_in_snapshot() {
     let Some(url) = database_url() else {
         return;
     };
+
+    let _env_guard = env_lock().lock().unwrap();
+    set_env("OLLAMA_URL", "http://127.0.0.1:1");
 
     let workspace_id = Uuid::new_v4();
     let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;

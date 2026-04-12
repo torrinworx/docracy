@@ -356,6 +356,10 @@ fn embedding_job_record_from_document(
     }
 }
 
+fn should_auto_embed_document(document: &Document) -> bool {
+    !document.extensions.contains_key("embedding")
+}
+
 async fn enqueue_vector_mirror_snapshot(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     record: &VectorMirrorRecord,
@@ -432,6 +436,54 @@ ON CONFLICT (workspace_id, document_id, embed_model) DO UPDATE SET
     Ok(())
 }
 
+async fn delete_embedding_job_snapshot(
+    pool: &PgPool,
+    workspace_id: WorkspaceUuid,
+    document_id: DocumentId,
+    embed_model: &str,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        r#"
+DELETE FROM embedding_job_queue
+WHERE workspace_id = $1 AND document_id = $2 AND embed_model = $3
+        "#,
+    )
+    .bind(workspace_id)
+    .bind(document_id.0)
+    .bind(embed_model)
+    .execute(pool)
+    .await
+    .map_err(map_sqlx_error)?;
+
+    Ok(())
+}
+
+async fn sync_document_embedding_and_clear_queue(
+    pool: &PgPool,
+    workspace_id: WorkspaceUuid,
+    document: &Document,
+    revision_id: RevisionId,
+    embed_model: &str,
+) -> Result<(), RepoError> {
+    let job = embedding_job_record_from_document(workspace_id, document, revision_id, embed_model);
+    let embedding = vector::ollama_embed_text(&job.source_text, &job.embed_model).await?;
+
+    vector::upsert_qdrant_document_embedding(
+        workspace_id,
+        document.id.0,
+        revision_id.0,
+        document.archived_at,
+        document.deleted_at,
+        &embedding,
+        &job.embed_model,
+    )
+    .await?;
+
+    delete_embedding_job_snapshot(pool, workspace_id, document.id, &job.embed_model).await?;
+
+    Ok(())
+}
+
 fn version_to_i32(version: u32) -> Result<i32, RepoError> {
     i32::try_from(version)
         .map_err(|_| RepoError::Storage("revision version out of range".to_string()))
@@ -470,6 +522,7 @@ impl Repository for PgRepository {
         doc: Document,
         rev: DocumentRevision,
     ) -> Result<(), RepoError> {
+        let workspace_id = self.workspace_id.unwrap_or_else(WorkspaceUuid::nil);
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         sqlx::query("SET CONSTRAINTS ALL DEFERRED")
             .execute(&mut *tx)
@@ -531,25 +584,41 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         })?;
 
         if let Some(record) = vector_mirror_record_from_document(
-            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            workspace_id,
             &doc,
             rev.id,
         )? {
             enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
         }
 
-        enqueue_embedding_job_snapshot(
-            &mut tx,
-            &embedding_job_record_from_document(
-                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+        if should_auto_embed_document(&doc) {
+            enqueue_embedding_job_snapshot(
+                &mut tx,
+                &embedding_job_record_from_document(
+                    workspace_id,
+                    &doc,
+                    rev.id,
+                    &self.ollama_embed_model,
+                ),
+            )
+            .await?;
+        }
+
+        tx.commit().await.map_err(map_sqlx_error)?;
+
+        // Best-effort immediate indexing; the queued job remains for retry if this fails.
+        if should_auto_embed_document(&doc)
+            && sync_document_embedding_and_clear_queue(
+                &self.pool,
+                workspace_id,
                 &doc,
                 rev.id,
                 &self.ollama_embed_model,
-            ),
-        )
-        .await?;
+            )
+            .await
+            .is_err()
+        {}
 
-        tx.commit().await.map_err(map_sqlx_error)?;
         Ok(())
     }
 
@@ -560,6 +629,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         superseded: DocumentRevision,
         new_rev: DocumentRevision,
     ) -> Result<(), RepoError> {
+        let workspace_id = self.workspace_id.unwrap_or_else(WorkspaceUuid::nil);
         let mut tx = self.pool.begin().await.map_err(map_sqlx_error)?;
         sqlx::query("SET CONSTRAINTS ALL DEFERRED")
             .execute(&mut *tx)
@@ -632,23 +702,12 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         .map_err(map_sqlx_error)?;
 
         if let Some(record) = vector_mirror_record_from_document(
-            self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
+            workspace_id,
             &doc,
             new_rev.id,
         )? {
             enqueue_vector_mirror_snapshot(&mut tx, &record).await?;
         }
-
-        enqueue_embedding_job_snapshot(
-            &mut tx,
-            &embedding_job_record_from_document(
-                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
-                &doc,
-                new_rev.id,
-                &self.ollama_embed_model,
-            ),
-        )
-        .await?;
 
         let updated = sqlx::query(
             r#"
@@ -684,20 +743,36 @@ WHERE id = $1
             return Err(RepoError::Storage("update of missing document".to_string()));
         }
 
-        enqueue_embedding_job_snapshot(
-            &mut tx,
-            &embedding_job_record_from_document(
-                self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
-                &doc,
-                doc.current_revision_id.ok_or_else(|| {
-                    RepoError::Storage("document missing current revision".to_string())
-                })?,
-                &self.ollama_embed_model,
-            ),
-        )
-        .await?;
+        if should_auto_embed_document(&doc) {
+            enqueue_embedding_job_snapshot(
+                &mut tx,
+                &embedding_job_record_from_document(
+                    workspace_id,
+                    &doc,
+                    doc.current_revision_id.ok_or_else(|| {
+                        RepoError::Storage("document missing current revision".to_string())
+                    })?,
+                    &self.ollama_embed_model,
+                ),
+            )
+            .await?;
+        }
 
         tx.commit().await.map_err(map_sqlx_error)?;
+
+        // Best-effort immediate indexing; the queued job remains for retry if this fails.
+        if should_auto_embed_document(&doc)
+            && sync_document_embedding_and_clear_queue(
+                &self.pool,
+                workspace_id,
+                &doc,
+                new_rev.id,
+                &self.ollama_embed_model,
+            )
+            .await
+            .is_err()
+        {}
+
         Ok(())
     }
 
