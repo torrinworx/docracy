@@ -187,7 +187,12 @@ async fn run() -> Result<()> {
         .or_else(|| std::env::var("DATABASE_URL").ok())
         .ok_or_else(|| anyhow!("missing --database-url and DATABASE_URL"))?;
 
-    let mut repo = PgRepository::connect(&database_url)
+    let startup_embed_model = docracy_postgres::require_ollama_embed_model(
+        std::env::var("OLLAMA_EMBED_MODEL").ok(),
+    )
+    .map_err(|err| anyhow!(err.to_string()))?;
+
+    let mut repo = PgRepository::connect(&database_url, startup_embed_model.clone())
         .await
         .context("failed to connect to postgres")?;
     if should_run_startup_migrations(&cli.command, cli.no_migrate) {
@@ -258,7 +263,12 @@ async fn run() -> Result<()> {
                             CliValidationError::new("query_vector requires either embedding or query")
                         })?;
 
-                    docracy_postgres::ollama_embed_text(query, q.embed_model.as_deref()).await?
+                    let embed_model = resolve_query_vector_embed_model(
+                        q.embed_model.as_deref(),
+                        startup_embed_model.as_str(),
+                    );
+
+                    docracy_postgres::ollama_embed_text(query, embed_model).await?
                 }
             };
 
@@ -347,6 +357,13 @@ fn normalize_task_scope(raw: Option<String>) -> Option<String> {
         let trimmed = value.trim();
         (!trimmed.is_empty()).then(|| trimmed.to_string())
     })
+}
+
+fn resolve_query_vector_embed_model<'a>(request: Option<&'a str>, startup: &'a str) -> &'a str {
+    request
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(startup)
 }
 
 fn resolve_workspace_id(input: Option<&str>) -> Result<Uuid> {
@@ -540,5 +557,25 @@ mod tests {
     #[test]
     fn normalize_task_scope_preserves_missing_values() {
         assert_eq!(normalize_task_scope(None), None);
+    }
+
+    #[test]
+    fn resolve_query_vector_embed_model_prefers_explicit_override() {
+        assert_eq!(
+            resolve_query_vector_embed_model(Some("request-model"), "startup-model"),
+            "request-model"
+        );
+    }
+
+    #[test]
+    fn resolve_query_vector_embed_model_falls_back_to_startup_model() {
+        assert_eq!(
+            resolve_query_vector_embed_model(None, "startup-model"),
+            "startup-model"
+        );
+        assert_eq!(
+            resolve_query_vector_embed_model(Some("   "), "startup-model"),
+            "startup-model"
+        );
     }
 }

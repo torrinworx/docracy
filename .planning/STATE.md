@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: MCP Server Interface
-status: unknown
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-04-11T01:13:20.561Z"
+status: complete
+stopped_at: Completed 15-02-SUMMARY.md
+last_updated: "2026-04-12T15:38:36.134Z"
 progress:
-  total_phases: 17
-  completed_phases: 15
-  total_plans: 31
-  completed_plans: 32
+  total_phases: 18
+  completed_phases: 16
+  total_plans: 34
+  completed_plans: 34
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-06)
 
 **Core value:** Agents can reliably store, evolve, and retrieve durable project knowledge as versioned documents via simple tools (Init/Create/Read/Query/Update).
-**Current focus:** Phase 14 — split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options
+**Current focus:** Phase 15 — explicit Ollama embedding config and startup preflight
 
 ## Current Position
 
-Phase: 14 (split-query-into-postgres-only-add-query-vector-with-auto-embedding-and-qdrant-options) — EXECUTING
-Plan: 4 of 4
+Phase: 15 (explicit Ollama embedding config and startup preflight) — COMPLETE
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -158,6 +158,7 @@ Recent decisions affecting current work:
 - [Phase 14]: Over-fetch Qdrant candidates with a bounded multiplier and truncate after Postgres filtering to reduce vector search dropouts
 - [Phase 14]: Expose docracy_core::query_vector_documents at the crate root for interface-layer consistency
 - [Phase 14]: Split MCP tool surface into query (Postgres-only) and query_vector (vector + auto-embedding)
+- [Phase 15]: Make Ollama embedding config explicit, with startup preflight that verifies or pulls the configured model before any embed call
 
 ### Milestone Setup
 
@@ -176,6 +177,8 @@ Recent decisions affecting current work:
 - Phase 10 added: Task-scoped init contexts.
 - Phase 11 added: Refresh README usage docs.
 - Phase 12 added: Vector mirror helper and vector query support.
+- Phase 15 added: Explicit Ollama embedding config and startup preflight.
+- Phase 15 completed: startup now resolves the Ollama embed model explicitly and preflights it before serving or polling.
 
 ### Pending Todos
 

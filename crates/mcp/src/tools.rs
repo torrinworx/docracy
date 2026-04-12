@@ -155,6 +155,12 @@ impl DocracyMcpServer {
     ) -> Result<Content, rmcp::model::ErrorData> {
         args.validate().map_err(|e| e.to_error_data())?;
 
+        let startup_embed_model = {
+            let guard = self.runtime_mut().await?;
+            let runtime = guard.as_ref().ok_or_else(Self::runtime_missing)?;
+            runtime.ollama_embed_model.clone()
+        };
+
         let embedding = match args.embedding {
             Some(embedding) => embedding,
             None => {
@@ -171,7 +177,12 @@ impl DocracyMcpServer {
                         .to_error_data()
                     })?;
 
-                docracy_postgres::ollama_embed_text(query, args.embed_model.as_deref())
+                let embed_model = resolve_query_vector_embed_model(
+                    args.embed_model.as_deref(),
+                    startup_embed_model.as_str(),
+                );
+
+                docracy_postgres::ollama_embed_text(query, embed_model)
                     .await
                     .map_err(|e| {
                         McpError::from_core(docracy_core::CoreError::Repo(e)).to_error_data()
@@ -400,4 +411,36 @@ fn parse_document_ids(
     ids: Vec<String>,
 ) -> Result<Vec<docracy_core::ids::DocumentId>, rmcp::model::ErrorData> {
     ids.into_iter().map(|raw| parse_document_id(&raw)).collect()
+}
+
+fn resolve_query_vector_embed_model<'a>(request: Option<&'a str>, startup: &'a str) -> &'a str {
+    request
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(startup)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_query_vector_embed_model;
+
+    #[test]
+    fn resolve_query_vector_embed_model_prefers_request_override() {
+        assert_eq!(
+            resolve_query_vector_embed_model(Some("request-model"), "startup-model"),
+            "request-model"
+        );
+    }
+
+    #[test]
+    fn resolve_query_vector_embed_model_falls_back_to_startup_model() {
+        assert_eq!(
+            resolve_query_vector_embed_model(None, "startup-model"),
+            "startup-model"
+        );
+        assert_eq!(
+            resolve_query_vector_embed_model(Some("   "), "startup-model"),
+            "startup-model"
+        );
+    }
 }

@@ -77,7 +77,7 @@ async fn isolated_repo_scoped(url: &str, workspace_id: Option<Uuid>) -> (PgRepos
         .await
         .unwrap();
 
-    (PgRepository::new(pool), schema_guard)
+    (PgRepository::new(pool, "embeddinggemma"), schema_guard)
 }
 
 #[derive(sqlx::FromRow, Debug)]

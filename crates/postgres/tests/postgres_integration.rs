@@ -12,12 +12,18 @@ use serde_json::Map;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::types::chrono::{DateTime, Utc};
 use tempfile::TempDir;
+use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
 fn database_url() -> Option<String> {
     std::env::var("DOCRACY_TEST_DATABASE_URL")
         .ok()
         .or_else(|| std::env::var("DATABASE_URL").ok())
+}
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn unique_schema_name() -> String {
@@ -97,7 +103,7 @@ async fn repo_on_schema(url: &str, schema: String, workspace_id: Option<Uuid>) -
         .await
         .unwrap();
 
-    PgRepository::new(pool)
+    PgRepository::new(pool, "embeddinggemma")
 }
 
 async fn assert_index_exists(repo: &PgRepository, index_name: &str) {
@@ -695,6 +701,7 @@ async fn vector_mirror_flush_leaves_queue_pending_when_qdrant_is_unavailable() {
     .await
     .unwrap();
 
+    let _env_guard = env_lock().lock().unwrap();
     std::env::set_var("QDRANT_URL", "http://127.0.0.1:1");
     let err = repo.flush_vector_mirror_queue().await.unwrap_err();
     std::env::remove_var("QDRANT_URL");
@@ -724,6 +731,7 @@ async fn vector_search_is_workspace_scoped_and_archive_aware() {
         doc_b_id.0, doc_a_id.0
     );
     let (qdrant_url, requests, server) = start_qdrant_mock(Box::leak(search_body.into_boxed_str()), 7);
+    let _env_guard = env_lock().lock().unwrap();
     std::env::set_var("QDRANT_URL", &qdrant_url);
 
     let (mut repo_a, _schema_guard_a) = isolated_repo_scoped(&url, Some(workspace_a)).await;
@@ -834,6 +842,7 @@ async fn vector_search_excludes_archived_documents_from_results() {
 
     let search_body = format!(r#"{{"result":[{{"id":"{}","score":0.99}}]}}"#, doc_id.0);
     let (qdrant_url, _requests, server) = start_qdrant_mock(Box::leak(search_body.into_boxed_str()), 7);
+    let _env_guard = env_lock().lock().unwrap();
     std::env::set_var("QDRANT_URL", &qdrant_url);
 
     let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace)).await;

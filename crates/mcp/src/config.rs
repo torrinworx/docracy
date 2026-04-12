@@ -22,6 +22,10 @@ pub enum McpTransport {
 pub struct McpStartupConfig {
     /// Postgres connection string.
     pub database_url: String,
+    /// Ollama base URL for model preflight.
+    pub ollama_url: String,
+    /// Ollama embedding model configured for this process.
+    pub ollama_embed_model: String,
     /// Whether to run SQL migrations during startup.
     pub run_migrations: bool,
     /// Optional workspace binding for the process lifetime.
@@ -35,6 +39,8 @@ pub struct McpStartupConfig {
 impl McpStartupConfig {
     pub fn new(
         database_url: impl Into<String>,
+        ollama_url: impl Into<String>,
+        ollama_embed_model: impl Into<String>,
         run_migrations: bool,
         workspace_id: Option<Uuid>,
         task_scope: Option<String>,
@@ -42,6 +48,8 @@ impl McpStartupConfig {
     ) -> Self {
         Self {
             database_url: database_url.into(),
+            ollama_url: ollama_url.into(),
+            ollama_embed_model: ollama_embed_model.into(),
             run_migrations,
             workspace_id,
             task_scope,
@@ -76,6 +84,8 @@ mod tests {
         let workspace_id = Uuid::from_u128(0x1234);
         let config = McpStartupConfig::new(
             "postgres://example",
+            "http://127.0.0.1:11434",
+            "embeddinggemma",
             true,
             Some(workspace_id),
             Some("task/alpha".to_string()),
@@ -84,6 +94,8 @@ mod tests {
 
         assert_eq!(config.workspace_id, Some(workspace_id));
         assert_eq!(config.task_scope.as_deref(), Some("task/alpha"));
+        assert_eq!(config.ollama_url, "http://127.0.0.1:11434");
+        assert_eq!(config.ollama_embed_model, "embeddinggemma");
     }
 
     #[test]

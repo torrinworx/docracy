@@ -1,14 +1,17 @@
-use super::{PgRepository, map_sqlx_error, qdrant_collection_name};
+use super::{
+    PgRepository, map_sqlx_error, qdrant_collection_name, require_ollama_embed_model,
+    verify_or_pull_ollama_embed_model,
+};
 use docracy_core::errors::RepoError;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use sqlx::types::Uuid;
 use sqlx::types::chrono::{DateTime, Utc};
 use std::time::Duration;
+use tokio::sync::OnceCell;
 use uuid::Uuid as WorkspaceUuid;
 
 const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
-const DEFAULT_OLLAMA_EMBED_MODEL: &str = "embeddinggemma";
 const DEFAULT_QDRANT_URL: &str = "http://127.0.0.1:6333";
 const DEFAULT_POLL_INTERVAL_MS: u64 = 1000;
 const DEFAULT_BATCH_SIZE: usize = 16;
@@ -41,8 +44,7 @@ impl IndexerConfig {
 
         let ollama_url =
             std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
-        let ollama_embed_model = std::env::var("OLLAMA_EMBED_MODEL")
-            .unwrap_or_else(|_| DEFAULT_OLLAMA_EMBED_MODEL.to_string());
+        let ollama_embed_model = require_ollama_embed_model(std::env::var("OLLAMA_EMBED_MODEL").ok())?;
         let qdrant_url =
             std::env::var("QDRANT_URL").unwrap_or_else(|_| DEFAULT_QDRANT_URL.to_string());
 
@@ -104,6 +106,7 @@ pub struct IndexerRuntime {
     repo: PgRepository,
     config: IndexerConfig,
     client: reqwest::Client,
+    startup_ready: OnceCell<()>,
 }
 
 impl IndexerRuntime {
@@ -142,13 +145,18 @@ RETURNING
 
     pub async fn connect_from_env(database_url: &str) -> Result<Self, RepoError> {
         let config = IndexerConfig::from_env()?;
-        let repo = PgRepository::connect_scoped(database_url, Some(config.workspace_id))
+        let repo = PgRepository::connect_scoped(
+            database_url,
+            Some(config.workspace_id),
+            config.ollama_embed_model.clone(),
+        )
             .await
             .map_err(|e| RepoError::Storage(e.to_string()))?;
         Ok(Self {
             repo,
             config,
             client: reqwest::Client::new(),
+            startup_ready: OnceCell::new(),
         })
     }
 
@@ -157,6 +165,7 @@ RETURNING
             repo,
             config,
             client: reqwest::Client::new(),
+            startup_ready: OnceCell::new(),
         }
     }
 
@@ -177,7 +186,21 @@ RETURNING
         Ok(jobs)
     }
 
+    async fn ensure_startup_ready(&self) -> Result<(), RepoError> {
+        self.startup_ready
+            .get_or_try_init(|| async {
+                verify_or_pull_ollama_embed_model(
+                    &self.config.ollama_url,
+                    &self.config.ollama_embed_model,
+                )
+                .await
+            })
+            .await
+            .map(|_| ())
+    }
+
     pub async fn process_once(&self) -> Result<usize, RepoError> {
+        self.ensure_startup_ready().await?;
         let claimed = self.claim_pending_jobs().await?;
 
         for job in &claimed {

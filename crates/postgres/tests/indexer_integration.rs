@@ -8,7 +8,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::types::chrono::{DateTime, Utc};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
@@ -17,6 +17,11 @@ fn set_env(key: &str, value: &str) {
     unsafe {
         std::env::set_var(key, value);
     }
+}
+
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 fn database_url() -> Option<String> {
@@ -94,7 +99,7 @@ async fn repo_on_schema(url: &str, schema: String, workspace_id: Option<Uuid>) -
         .await
         .unwrap();
 
-    PgRepository::new(pool)
+    PgRepository::new(pool, "embeddinggemma")
 }
 
 async fn seed_embedding_job(repo: &mut PgRepository, content: Value) -> docracy_core::DocumentId {
@@ -209,6 +214,7 @@ fn start_qdrant_mock(request_limit: usize) -> (String, Arc<Mutex<Vec<String>>>, 
 
 #[test]
 fn indexer_config_reads_worker_env() {
+    let _env_guard = env_lock().lock().unwrap();
     set_env("WORKSPACE_ID", "00000000-0000-0000-0000-000000000001");
     set_env("OLLAMA_URL", "http://127.0.0.1:11434");
     set_env("OLLAMA_EMBED_MODEL", "embeddinggemma");
@@ -227,6 +233,17 @@ fn indexer_config_reads_worker_env() {
     assert_eq!(config.qdrant_url, "http://127.0.0.1:6333");
     assert_eq!(config.poll_interval_ms, 250);
     assert_eq!(config.batch_size, 8);
+}
+
+#[test]
+fn indexer_config_rejects_blank_embed_model() {
+    let _env_guard = env_lock().lock().unwrap();
+    set_env("WORKSPACE_ID", "00000000-0000-0000-0000-000000000001");
+    set_env("OLLAMA_URL", "http://127.0.0.1:11434");
+    set_env("OLLAMA_EMBED_MODEL", "   ");
+    set_env("QDRANT_URL", "http://127.0.0.1:6333");
+
+    assert!(IndexerConfig::from_env().is_err());
 }
 
 #[test]
@@ -252,6 +269,8 @@ async fn indexer_embeds_canonical_source_text_and_upserts_qdrant() {
         return;
     };
 
+    let _env_guard = env_lock().lock().unwrap();
+
     let workspace_id = Uuid::new_v4();
     let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
     repo.migrate().await.unwrap();
@@ -260,7 +279,7 @@ async fn indexer_embeds_canonical_source_text_and_upserts_qdrant() {
     let document_id = seed_embedding_job(&mut repo, json!({"body": "alpha"})).await;
 
     let ollama_body = r#"{"model":"embeddinggemma","embeddings":[[0.1,0.2,0.3]]}"#;
-    let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(ollama_body, 1);
+    let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(ollama_body, 2);
     let (qdrant_url, qdrant_requests, qdrant_server) = start_qdrant_mock(3);
 
     set_env("WORKSPACE_ID", &workspace_id.to_string());
@@ -274,9 +293,11 @@ async fn indexer_embeds_canonical_source_text_and_upserts_qdrant() {
     runtime.process_once().await.unwrap();
 
     let requests = ollama_requests.lock().unwrap();
-    assert!(requests[0].starts_with("POST /api/embed"));
+    assert!(requests[0].starts_with("POST /api/show"));
     assert!(requests[0].contains("\"model\":\"embeddinggemma\""));
-    assert!(requests[0].contains("\"input\":\"{\\\"body\\\":\\\"alpha\\\"}\""));
+    assert!(requests[1].starts_with("POST /api/embed"));
+    assert!(requests[1].contains("\"model\":\"embeddinggemma\""));
+    assert!(requests[1].contains("\"input\":\"{\\\"body\\\":\\\"alpha\\\"}\""));
 
     let requests = qdrant_requests.lock().unwrap();
     assert!(requests.iter().any(|request| {
@@ -306,6 +327,8 @@ async fn indexer_retries_failed_jobs_with_attempt_count_and_error_metadata() {
         return;
     };
 
+    let _env_guard = env_lock().lock().unwrap();
+
     let workspace_id = Uuid::new_v4();
     let (mut repo, _schema_guard) = isolated_repo_scoped(&url, Some(workspace_id)).await;
     repo.migrate().await.unwrap();
@@ -313,10 +336,7 @@ async fn indexer_retries_failed_jobs_with_attempt_count_and_error_metadata() {
 
     let document_id = seed_embedding_job(&mut repo, json!({"body": "retry me"})).await;
 
-    let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(
-        r#"{"error":"boom"}"#,
-        1,
-    );
+    let (ollama_url, ollama_requests, ollama_server) = start_ollama_mock(r#"{"error":"boom"}"#, 2);
 
     set_env("WORKSPACE_ID", &workspace_id.to_string());
     set_env("OLLAMA_URL", &ollama_url);
@@ -329,7 +349,8 @@ async fn indexer_retries_failed_jobs_with_attempt_count_and_error_metadata() {
     runtime.process_once().await.unwrap();
 
     let requests = ollama_requests.lock().unwrap();
-    assert!(requests[0].starts_with("POST /api/embed"));
+    assert!(requests[0].starts_with("POST /api/show"));
+    assert!(requests[1].starts_with("POST /api/embed"));
 
     #[derive(sqlx::FromRow)]
     struct QueueRow {

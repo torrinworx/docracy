@@ -12,6 +12,7 @@ pub struct McpRuntime {
     pub governance: FsGovernanceSource,
     pub clock: SystemClock,
     pub ids: UuidV4Generator,
+    pub ollama_embed_model: String,
     pub workspace_id: Option<uuid::Uuid>,
     pub task_scope: Option<String>,
 }
@@ -30,16 +31,24 @@ pub async fn run_migrations(repo: &PgRepository, config: &McpStartupConfig) -> a
 /// Transport entrypoints (stdio, http) should call this to avoid duplicating
 /// startup logic.
 pub async fn bootstrap(config: &McpStartupConfig) -> anyhow::Result<McpRuntime> {
-    let repo = PgRepository::connect_scoped(&config.database_url, config.workspace_id)
+    let repo = PgRepository::connect_scoped(
+        &config.database_url,
+        config.workspace_id,
+        config.ollama_embed_model.clone(),
+    )
         .await
         .context("failed to connect to postgres")?;
     run_migrations(&repo, config).await?;
+    docracy_postgres::verify_or_pull_ollama_embed_model(&config.ollama_url, &config.ollama_embed_model)
+        .await
+        .context("failed to verify ollama embedding model")?;
 
     Ok(McpRuntime {
         repo,
         governance: FsGovernanceSource::repo_owned(),
         clock: SystemClock,
         ids: UuidV4Generator,
+        ollama_embed_model: config.ollama_embed_model.clone(),
         workspace_id: config.workspace_id,
         task_scope: config.task_scope.clone(),
     })

@@ -4,6 +4,8 @@ use rmcp::ServiceExt;
 use std::io::Write;
 use tracing_subscriber::EnvFilter;
 
+const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
+
 #[derive(Debug, Parser)]
 #[command(name = "docracy-mcp")]
 #[command(about = "Docracy MCP server (stdio)")]
@@ -43,6 +45,11 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|err| anyhow::anyhow!("invalid WORKSPACE_ID: {err}"))?;
     let task_scope =
         docracy_mcp::config::parse_task_scope(std::env::var("DOCRACY_TASK_SCOPE").ok().as_deref());
+    let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
+    let ollama_embed_model = docracy_postgres::require_ollama_embed_model(
+        std::env::var("OLLAMA_EMBED_MODEL").ok(),
+    )
+    .map_err(|err| anyhow::anyhow!(err.to_string()))?;
 
     let database_url = match args
         .database_url
@@ -54,6 +61,8 @@ async fn run() -> anyhow::Result<()> {
 
     let config = McpStartupConfig::new(
         database_url,
+        ollama_url,
+        ollama_embed_model,
         !args.no_migrate,
         workspace_id,
         task_scope,

@@ -19,17 +19,12 @@ use sqlx::types::Uuid;
 use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid as WorkspaceUuid;
 
-pub use vector::ollama_embed_text;
+pub use vector::{ollama_embed_text, require_ollama_embed_model, verify_or_pull_ollama_embed_model};
 pub use vector::qdrant_collection_name;
 
 const RAW_QUERY_LIMIT_CEILING: u32 = 100;
 const RAW_QUERY_DEFAULT_LIMIT: u32 = 10;
 const RAW_QUERY_TIMEOUT_CEILING_MS: u64 = 5000;
-const DEFAULT_EMBED_MODEL: &str = "nomic-embed-text";
-
-fn default_embed_model() -> String {
-    std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| DEFAULT_EMBED_MODEL.to_string())
-}
 
 fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
     if id.is_nil() {
@@ -44,13 +39,15 @@ fn validate_workspace_id(id: WorkspaceUuid) -> Result<(), RepoError> {
 pub struct PgRepository {
     pool: PgPool,
     workspace_id: Option<WorkspaceUuid>,
+    ollama_embed_model: String,
 }
 
 impl PgRepository {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, ollama_embed_model: impl Into<String>) -> Self {
         Self {
             pool,
             workspace_id: None,
+            ollama_embed_model: ollama_embed_model.into(),
         }
     }
 
@@ -62,14 +59,19 @@ impl PgRepository {
         self.workspace_id
     }
 
-    pub async fn connect(database_url: &str) -> Result<Self, sqlx::Error> {
-        Self::connect_scoped(database_url, None).await
+    pub async fn connect(
+        database_url: &str,
+        ollama_embed_model: impl Into<String>,
+    ) -> Result<Self, sqlx::Error> {
+        Self::connect_scoped(database_url, None, ollama_embed_model).await
     }
 
     pub async fn connect_scoped(
         database_url: &str,
         workspace_id: Option<WorkspaceUuid>,
+        ollama_embed_model: impl Into<String>,
     ) -> Result<Self, sqlx::Error> {
+        let ollama_embed_model = ollama_embed_model.into();
         let mut pool_options = PgPoolOptions::new();
         let workspace_id_for_pool = workspace_id.clone();
 
@@ -88,7 +90,11 @@ impl PgRepository {
         }
 
         let pool = pool_options.connect(database_url).await?;
-        Ok(Self { pool, workspace_id })
+        Ok(Self {
+            pool,
+            workspace_id,
+            ollama_embed_model,
+        })
     }
 
     pub async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
@@ -538,7 +544,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
                 &doc,
                 rev.id,
-                default_embed_model().as_str(),
+                &self.ollama_embed_model,
             ),
         )
         .await?;
@@ -639,7 +645,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 self.workspace_id.unwrap_or_else(WorkspaceUuid::nil),
                 &doc,
                 new_rev.id,
-                default_embed_model().as_str(),
+                &self.ollama_embed_model,
             ),
         )
         .await?;
@@ -686,7 +692,7 @@ WHERE id = $1
                 doc.current_revision_id.ok_or_else(|| {
                     RepoError::Storage("document missing current revision".to_string())
                 })?,
-                default_embed_model().as_str(),
+                &self.ollama_embed_model,
             ),
         )
         .await?;

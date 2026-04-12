@@ -5,7 +5,6 @@ use sqlx::types::Uuid;
 use uuid::Uuid as WorkspaceUuid;
 
 const DEFAULT_OLLAMA_URL: &str = "http://127.0.0.1:11434";
-const DEFAULT_OLLAMA_EMBED_MODEL: &str = "embeddinggemma";
 const DEFAULT_QDRANT_URL: &str = "http://127.0.0.1:6333";
 const QDRANT_VECTOR_SIZE_ENV: &str = "QDRANT_VECTOR_SIZE";
 
@@ -30,6 +29,19 @@ fn qdrant_base_url() -> String {
 
 fn qdrant_storage_error(message: impl Into<String>) -> RepoError {
     RepoError::Storage(message.into())
+}
+
+pub fn require_ollama_embed_model(raw: Option<String>) -> Result<String, RepoError> {
+    let model = raw
+        .ok_or_else(|| qdrant_storage_error("OLLAMA_EMBED_MODEL is required"))?
+        .trim()
+        .to_string();
+
+    if model.is_empty() {
+        return Err(qdrant_storage_error("OLLAMA_EMBED_MODEL is required"));
+    }
+
+    Ok(model)
 }
 
 pub(crate) fn qdrant_vector_size_from_env() -> Option<usize> {
@@ -156,6 +168,7 @@ impl QdrantClient {
         collection: &str,
         record: &VectorMirrorQueueRow,
         embedding: &[f32],
+        embed_model: &str,
     ) -> Result<(), RepoError> {
         let url = qdrant_points_url(&self.base_url, collection);
         let response = self
@@ -169,7 +182,7 @@ impl QdrantClient {
                         "workspace_id": record.workspace_id.to_string(),
                         "document_id": record.document_id.to_string(),
                         "revision_id": record.revision_id.to_string(),
-                        "embed_model": std::env::var("OLLAMA_EMBED_MODEL").unwrap_or_else(|_| "embeddinggemma".to_string()),
+                        "embed_model": embed_model,
                         "archived_at": record.archived_at.map(|value| value.to_rfc3339()),
                         "deleted_at": record.deleted_at.map(|value| value.to_rfc3339()),
                         "embedding_dimension": embedding.len(),
@@ -287,14 +300,22 @@ pub(crate) async fn qdrant_search_point_ids(
 
 pub async fn ollama_embed_text(
     input: &str,
-    embed_model: Option<&str>,
+    embed_model: &str,
 ) -> Result<Vec<f32>, RepoError> {
     let ollama_url = std::env::var("OLLAMA_URL").unwrap_or_else(|_| DEFAULT_OLLAMA_URL.to_string());
-    let model = match embed_model {
-        Some(model) => model.to_string(),
-        None => std::env::var("OLLAMA_EMBED_MODEL")
-            .unwrap_or_else(|_| DEFAULT_OLLAMA_EMBED_MODEL.to_string()),
-    };
+    ollama_embed_text_with_base_url(&ollama_url, input, embed_model).await
+}
+
+async fn ollama_embed_text_with_base_url(
+    ollama_url: &str,
+    input: &str,
+    embed_model: &str,
+) -> Result<Vec<f32>, RepoError> {
+    let model = embed_model.trim();
+
+    if model.is_empty() {
+        return Err(RepoError::Storage("OLLAMA_EMBED_MODEL is required".to_string()));
+    }
 
     let url = format!("{}/api/embed", ollama_url.trim_end_matches('/'));
     let response = reqwest::Client::new()
@@ -346,6 +367,55 @@ pub async fn ollama_embed_text(
     Ok(vector)
 }
 
+pub async fn verify_or_pull_ollama_embed_model(
+    ollama_url: &str,
+    embed_model: &str,
+) -> Result<(), RepoError> {
+    let model = embed_model.trim();
+    if model.is_empty() {
+        return Err(RepoError::Storage("OLLAMA_EMBED_MODEL is required".to_string()));
+    }
+
+    let client = reqwest::Client::new();
+    let show_url = format!("{}/api/show", ollama_url.trim_end_matches('/'));
+    let response = client
+        .post(&show_url)
+        .json(&json!({"model": model}))
+        .send()
+        .await
+        .map_err(|e| RepoError::Storage(format!("ollama model show request failed: {e}")))?;
+
+    if response.status().is_success() {
+        return Ok(());
+    }
+
+    if response.status() != reqwest::StatusCode::NOT_FOUND {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(RepoError::Storage(format!(
+            "ollama model show failed: {status} {body}"
+        )));
+    }
+
+    let pull_url = format!("{}/api/pull", ollama_url.trim_end_matches('/'));
+    let response = client
+        .post(&pull_url)
+        .json(&json!({"model": model, "stream": false}))
+        .send()
+        .await
+        .map_err(|e| RepoError::Storage(format!("ollama model pull request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(RepoError::Storage(format!(
+            "ollama model pull failed: {status} {body}"
+        )));
+    }
+
+    Ok(())
+}
+
 impl PgRepository {
     pub async fn flush_vector_mirror_queue(&mut self) -> Result<usize, RepoError> {
         let rows = sqlx::query_as::<_, VectorMirrorQueueRow>(
@@ -376,7 +446,9 @@ ORDER BY modified_at ASC, document_id ASC
             qdrant
                 .ensure_collection(&collection, embedding.len())
                 .await?;
-            qdrant.upsert_point(&collection, &row, &embedding).await?;
+            qdrant
+                .upsert_point(&collection, &row, &embedding, &self.ollama_embed_model)
+                .await?;
 
             sqlx::query(
                 r#"
@@ -501,11 +573,11 @@ mod tests {
             .await
             .expect("create collection");
         client
-            .upsert_point(&collection, &row, &embedding)
+            .upsert_point(&collection, &row, &embedding, "embeddinggemma")
             .await
             .expect("first upsert");
         client
-            .upsert_point(&collection, &row, &embedding)
+            .upsert_point(&collection, &row, &embedding, "embeddinggemma")
             .await
             .expect("second upsert");
 
@@ -559,14 +631,11 @@ mod tests {
             }
         });
 
-        std::env::set_var("QDRANT_URL", format!("http://{addr}"));
-
         let collection = qdrant_collection_name(WorkspaceUuid::new_v4());
-        let ids = qdrant_search_point_ids(&collection, &[0.1, 0.2, 0.3], 1)
+        let ids = QdrantClient::with_base_url(format!("http://{addr}"))
+            .search_point_ids_with_recovery(&collection, &[0.1, 0.2, 0.3], 1)
             .await
             .expect("search should recover");
-
-        std::env::remove_var("QDRANT_URL");
         server.join().expect("server thread");
 
         assert_eq!(ids, vec![expected_search_result_id]);
@@ -592,13 +661,13 @@ mod tests {
             respond(&mut stream, "200 OK", r#"{"embeddings":[[0.1,0.2,0.3]]}"#);
         });
 
-        std::env::set_var("OLLAMA_URL", format!("http://{addr}"));
-
-        let embedding = super::ollama_embed_text("hello", Some("test-model"))
+        let embedding = super::ollama_embed_text_with_base_url(
+            &format!("http://{addr}"),
+            "hello",
+            "test-model",
+        )
             .await
             .unwrap();
-
-        std::env::remove_var("OLLAMA_URL");
 
         assert_eq!(embedding, vec![0.1, 0.2, 0.3]);
 
@@ -608,5 +677,75 @@ mod tests {
         assert!(captured[0].starts_with("POST /api/embed"));
         assert!(captured[0].contains("\"model\":\"test-model\""));
         assert!(captured[0].contains("\"input\":\"hello\""));
+    }
+
+    #[test]
+    fn require_ollama_embed_model_trims_and_requires_value() {
+        assert_eq!(
+            super::require_ollama_embed_model(Some("  test-model  ".to_string())).unwrap(),
+            "test-model"
+        );
+        assert!(super::require_ollama_embed_model(None).is_err());
+        assert!(super::require_ollama_embed_model(Some("   ".to_string())).is_err());
+    }
+
+    #[tokio::test]
+    async fn verify_or_pull_ollama_embed_model_accepts_existing_model() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let captured = Arc::new(Mutex::new(Vec::<String>::new()));
+        let captured_server = Arc::clone(&captured);
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let request = read_http_request(&mut stream);
+            captured_server.lock().expect("capture lock").push(request);
+            respond(&mut stream, "200 OK", r#"{"result":"ok"}"#);
+        });
+
+        super::verify_or_pull_ollama_embed_model(&format!("http://{addr}"), "test-model")
+            .await
+            .unwrap();
+
+        server.join().expect("server thread");
+
+        let captured = captured.lock().expect("captured requests");
+        assert_eq!(captured.len(), 1);
+        assert!(captured[0].starts_with("POST /api/show"));
+        assert!(captured[0].contains("\"model\":\"test-model\""));
+    }
+
+    #[tokio::test]
+    async fn verify_or_pull_ollama_embed_model_pulls_missing_model() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = listener.local_addr().expect("listener addr");
+        let captured = Arc::new(Mutex::new(Vec::<String>::new()));
+        let captured_server = Arc::clone(&captured);
+
+        let server = thread::spawn(move || {
+            for request_idx in 0..2 {
+                let (mut stream, _) = listener.accept().expect("accept request");
+                let request = read_http_request(&mut stream);
+                captured_server.lock().expect("capture lock").push(request.clone());
+
+                match request_idx {
+                    0 => respond(&mut stream, "404 Not Found", r#"{"error":"missing"}"#),
+                    1 => respond(&mut stream, "200 OK", r#"{"status":"pulled"}"#),
+                    _ => unreachable!(),
+                }
+            }
+        });
+
+        super::verify_or_pull_ollama_embed_model(&format!("http://{addr}"), "test-model")
+            .await
+            .unwrap();
+
+        server.join().expect("server thread");
+
+        let captured = captured.lock().expect("captured requests");
+        assert!(captured[0].starts_with("POST /api/show"));
+        assert!(captured[1].starts_with("POST /api/pull"));
+        assert!(captured[1].contains("\"model\":\"test-model\""));
+        assert!(captured[1].contains("\"stream\":false"));
     }
 }

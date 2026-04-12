@@ -89,7 +89,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -106,6 +106,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 11. Refresh README usage docs | 2/2 | Complete   | 2026-04-09 |
 | 12. Vector mirror helper and vector query support | 2/2 | Complete   | 2026-04-10 |
 | 13. Async Ollama Embedding Worker and Qdrant-Only Vector Index | 2/2 | Complete   | 2026-04-10 |
+| 14. Split query into Postgres-only; add query_vector with auto-embedding and Qdrant options | 4/4 | Complete | 2026-04-12 |
+| 15. Explicit Ollama embedding config and startup preflight | 2/2 | Complete | 2026-04-12 |
 
 ## Archived Milestones
 
@@ -210,3 +212,14 @@ Plans:
 - [x] 14-02-PLAN.md — Postgres: Ollama embed helper + vector query test migration
 - [x] 14-03-PLAN.md — CLI: add `query-vector` subcommand with auto-embedding
 - [x] 14-04-PLAN.md — MCP: add `query_vector` tool + update `query` schema/docs
+
+### Phase 15: Explicit Ollama embedding config and startup preflight
+
+**Goal**: Ollama embedding model selection is explicit in runtime config, shared by CLI/MCP/worker startup, and validated before embeddings run so the configured model can be pulled or verified once instead of being guessed inside core logic.
+**Requirements**: CFG-01, IDX-03
+**Depends on:** Phase 14
+**Plans**: 2/2 plans complete
+
+Plans:
+- [x] 15-01: Explicit Ollama embed helper + Postgres/worker plumbing
+- [x] 15-02: CLI/MCP startup wiring + preflight enforcement
