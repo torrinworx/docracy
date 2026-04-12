@@ -1,3 +1,5 @@
+# This compose file serves as an example to setup the dependency systems.
+
 services:
   ollama:
     image: ollama/ollama:latest
